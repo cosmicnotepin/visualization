@@ -6,6 +6,7 @@ import os
 import sys
 from pandas import *
 
+#textitext
 maxAxles = 10
 #directory = r'C:\Users\borgro\svn\java\SensorFusion\Daten\Daten'
 directory = r'D:\Rohdaten\FRV\Daten'
