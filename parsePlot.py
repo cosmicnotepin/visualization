@@ -5,12 +5,14 @@ import re
 import os
 import sys
 from pandas import *
+from datetime import datetime
 
 #textitext
 maxAxles = 10
 #directory = r'C:\Users\borgro\svn\java\SensorFusion\Daten\Daten'
 directory = r'D:\Rohdaten\FRV\Daten'
-class2Marker = { "nicht_klass_Kfz":dict(marker='x', c='black'), "Motorrad":dict(marker='4', c='yellow'), "PKW":dict(marker='o', c='blue'), "Kleintransporter":dict(marker='>', c='green'), "PKW_Anhaenger":dict(marker='s', c='cyan'), "LKW":dict(marker='+', c='red'), "LKW_Anhaenger":dict(marker='P', c='magenta'), "Sattel_KFZ":dict(marker='*', c='brown'), "Bus":dict(marker='_', c='DarkGoldenRod'), "ungueltig":dict(marker='None', c='DarkGoldenRod')  }
+#directory = r'D:\Rohdaten\FREII1\Daten'
+class2Marker = { "nicht_klass_Kfz":dict(marker='x', c='black'), "Motorrad":dict(marker='4', c='yellow'), "PKW":dict(marker='o', c='blue'), "Kleintransporter":dict(marker='>', c='green'), "PKW_Anhaenger":dict(marker='s', c='cyan'), "LKW":dict(marker='+', c='red'), "LKW_Anhaenger":dict(marker='P', c='magenta'), "Sattel_Kfz":dict(marker='*', c='brown'), "Bus":dict(marker='_', c='DarkGoldenRod'), "ungueltig":dict(marker='None', c='DarkGoldenRod')  }
 
 
 def parseWimFile(path):
@@ -19,8 +21,13 @@ def parseWimFile(path):
     match = re.match(pattern, path)
     with open(directory + match.group('relPath'), 'r') as wf:
         line = wf.readline()
-        pattern = '.*? NumScaleAxleIdWeight=(?P<NumScaleAxleIdWeight>.*?) NumAxleCountPerScale=(?P<NumAxleCountPerScale>.*?) NumAxleSpacing=(?P<NumAxleSpacing>.*?) .*'
+        pattern = 'start=(?P<start>.*?) stop=(?P<stop>.*?) speed=(?P<speed>.*?) .*? NumScaleAxleIdWeight=(?P<NumScaleAxleIdWeight>.*?) NumAxleCountPerScale=(?P<NumAxleCountPerScale>.*?) NumAxleSpacing=(?P<NumAxleSpacing>.*?) .*'
         match = re.match(pattern, line)
+        startTime = datetime.strptime(match.group('start'), '%Y-%m-%d %H:%M:%S.%f')
+        stopTime = datetime.strptime(match.group('stop'), '%Y-%m-%d %H:%M:%S.%f')
+        speed = float(match.group('speed').replace(',','.'))
+        vehicleTimeSeconds = (stopTime - startTime).total_seconds()
+        vehicleLoopLength = (speed/3.6) * vehicleTimeSeconds
         NumScaleAxleIdWeight = int(match.group('NumScaleAxleIdWeight'))
         NumAxleCountPerScale = int(match.group('NumAxleCountPerScale'))
         NumAxleSpacing = int(match.group('NumAxleSpacing'))
@@ -29,7 +36,7 @@ def parseWimFile(path):
         for i in range(NumAxleSpacing):
             axleSpacings.append(float(wf.readline().replace(',', '.')))
 
-    return axleSpacings
+    return axleSpacings, vehicleLoopLength
 
 def parseVehicleFiles(directory = directory):
     vehicles = []
@@ -57,12 +64,16 @@ def parseVehicleFiles(directory = directory):
                     vehicle['class'] = cf.readline()
 
                 vf.readline() #skip empty line
-                axleSpacings = parseWimFile(vf.readline())
+                axleSpacings, vehicleLoopLength = parseWimFile(vf.readline())
+                vehicle['vehicleLoopLength'] = vehicleLoopLength
+                vehicle['axleSpacingsSum'] = 0
                 for i in range(maxAxles - 1):
                     if(i<len( axleSpacings )):
                         vehicle['axleSpacing' + str(i)] = axleSpacings[i]
+                        vehicle['axleSpacingsSum'] = vehicle['axleSpacingsSum'] + axleSpacings[i]
                     else:
                         vehicle['axleSpacing' + str(i)] = 0
+                vehicle['overhang'] = vehicleLoopLength - vehicle['axleSpacingsSum']
                 vehicles.append(vehicle)
         except FileNotFoundError:
             continue #no cls-file: skip
@@ -91,15 +102,49 @@ def plotVehicles(vehicles, xDim='length', yDim='weight', zDim=None, classes=clas
 
 
 def plotVehiclesTest(vehicles, xDim='length', yDim='weight', zDim=None, classes=class2Marker.keys()):
-    #df = DataFrame(vehicles[:20])
-    df = DataFrame(vehicles)
-    #df['current'] = abs(df['axleWeight0'] - df['axleWeight1']) # Differenz Achsgewichte
     minAxleDistance = 2 
-    #df['current'] = (df['axleSpacing0'] > minAxleDistance).astype(int)
+    #vehicles = vehicles[19:20]
+
+    #Gewicht der zweiten Hauptachse
+    for vehicle in vehicles:
+        foundSecondMain = False
+        for i in range(0, maxAxles - 2):
+            if (not foundSecondMain):
+                if (vehicle['axleSpacing' + str(i)] < minAxleDistance):
+                    continue
+                else:
+                    foundSecondMain = True
+                    vehicle['secondMainAxleWeight'] = vehicle['axleWeight' + str(i + 1)]
+                    continue
+
+            if (foundSecondMain and vehicle['axleSpacing' + str(i)] < minAxleDistance):
+                vehicle['secondMainAxleWeight'] += vehicle['axleWeight' + str(i + 1)]
+            else:
+                break
+
+    df = DataFrame(vehicles)
+
+    #df['custom'] = abs(df['axleWeight0'] - df['axleWeight1']) # Differenz Achsgewichte
+
+    #Hauptachsabstaende
+    df['custom'] = (df['axleSpacing0'] > minAxleDistance).astype(int)
+    for i in range(1,maxAxles-1):
+        df['custom'] += (df['axleSpacing' + str(i)] > minAxleDistance).astype(int)
+
+    #df = df[df['axles'] > 2]
+    #df = df[df['axleSpacing0'] > 5.7]
+
+    #df['i0'] = (df['axleSpacing0'] < minAxleDistance).astype(int)
+    #df['marker'] = (df['axleSpacing0'] > minAxleDistance).astype(int)
     #for i in range(1,maxAxles-1):
-    #    df['current'] += (df['axleSpacing' + str(i)] > minAxleDistance).astype(int)
-    #print(df)
-    df = df[df['axles'] == 2]
+    #    df['i0'] += (df['axleSpacing' + str(i)] < minAxleDistance && df['marker'] == 0).astype(int)
+    #    df['marker'] = (df['axleSpacing' + str(i)] > minAxleDistance || df['marker'] == 1).astype(int)
+
+    #df['i1'] = df['i0']
+    #for i in range(1,maxAxles-1):
+    #    df['i1'] += (df['axleSpacing' + str(i)] < minAxleDistance && df['marker'] == 1).astype(int)
+    #    df['marker'] = (df['axleSpacing' + str(i)] < minAxleDistance && df['marker'] == 1).astype(int)
+
     fig = plt.figure()
     if (zDim):
         ax = fig.add_subplot(111, projection='3d')
@@ -120,3 +165,7 @@ def plotVehiclesTest(vehicles, xDim='length', yDim='weight', zDim=None, classes=
 
 def explainPKWVsKleintransporter():
     plotVehicles(parseVehicleFiles(), classes=['PKW', 'Kleintransporter'], xDim = 'axleSpacing0')
+
+def fixData():
+    vehicles = parseVehicleFiles()
+
