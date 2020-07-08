@@ -120,6 +120,7 @@ def plotVehiclesTest(vehicles, xDim='length', yDim='weight', zDim=None, classes=
             if (foundSecondMain and vehicle['axleSpacing' + str(i)] < minAxleDistance):
                 vehicle['secondMainAxleWeight'] += vehicle['axleWeight' + str(i + 1)]
             else:
+                vehicle['secondMainSpacing'] = vehicle['axleSpacing' + str(i)]
                 break
 
     df = DataFrame(vehicles)
@@ -131,7 +132,7 @@ def plotVehiclesTest(vehicles, xDim='length', yDim='weight', zDim=None, classes=
     for i in range(1,maxAxles-1):
         df['custom'] += (df['axleSpacing' + str(i)] > minAxleDistance).astype(int)
 
-    #df = df[df['axles'] > 2]
+    df = df[df['axles'] > 2]
     #df = df[df['axleSpacing0'] > 5.7]
 
     #df['i0'] = (df['axleSpacing0'] < minAxleDistance).astype(int)
