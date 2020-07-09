@@ -7,6 +7,10 @@ import sys
 from pandas import *
 from datetime import datetime
 import contextlib
+from enum import Enum
+import sklearn
+from sklearn import tree
+import math
 
 #textitext
 maxAxles = 10
@@ -16,6 +20,18 @@ maxAxles = 10
 directory = r'D:\Rohdaten\FRV_FREII1clean\Daten'
 class2Marker = { "nicht_klass_Kfz":dict(marker='x', c='black'), "Motorrad":dict(marker='4', c='yellow'), "PKW":dict(marker='o', c='blue'), "Kleintransporter":dict(marker='>', c='green'), "PKW_Anhaenger":dict(marker='s', c='cyan'), "LKW":dict(marker='+', c='red'), "LKW_Anhaenger":dict(marker='P', c='magenta'), "Sattel_Kfz":dict(marker='*', c='brown'), "Bus":dict(marker='_', c='DarkGoldenRod'), "ungueltig":dict(marker='None', c='DarkGoldenRod')  }
 
+class vClass(Enum):
+    nicht_klass_Kfz = 1
+    Motorrad = 2
+    PKW = 3
+    Kleintransporter = 4
+    PKW_Anhaenger = 5
+    LKW = 6
+    LKW_Anhaenger = 7
+    Sattel_Kfz = 8
+    Bus = 9
+    ungueltig = 10
+    fraglich = 11
 
 def parseWimFile(path):
     axleSpacings = []
@@ -64,6 +80,8 @@ def parseVehicleFiles(directory = directory):
 
                 with open(entry.path.replace(".txt", ".cls"), 'r') as cf:
                     vehicle['class'] = cf.readline()
+                with open(entry.path.replace(".txt", ".acls"), 'r') as cf:
+                    vehicle['aclass'] = cf.readline()
 
                 vf.readline() #skip empty line
                 axleSpacings, vehicleLoopLength = parseWimFile(vf.readline())
@@ -212,4 +230,49 @@ def cleanupData():
 
     print('removed vehicles: ' + str(noVDel) + ' removed pictures: ' + str(noPDel))
 
+def decisionTreeTest():
+    directory = r'D:\Rohdaten\FRV_FREII1clean\Daten'
+    vehicles = parseVehicleFiles(directory)
+    samples = []
+    labels = []
+    aLabels = []
+    for v in vehicles:
+        sample = []
+        def inner():
+            for key, value in v.items():
+                if (key == 'class'):
+                    if (v[key] in [vc.name for vc in vClass][0:9]):
+                        labels.append(vClass[v[key]].value)
+                    else:
+                        print(v[key])
+                        return
+                elif (key == 'aclass'):
+                    aLabels.append(vClass[v[key]].value)
+                else:
+                    sample.append(v[key])
 
+            samples.append(sample) 
+        inner()
+
+    half = math.floor(len(labels)/2)
+    print("labels: " + str(len(labels)))
+    print("samples: " + str(len(samples)))
+
+    clf = tree.DecisionTreeClassifier(class_weight = 'balanced')#, max_depth = 2)
+    firstHalfSamples = samples[0:half]
+    firstHalfLabels = labels[0:half]
+    secondHalfSamples = samples[half:len(samples)]
+    secondHalfLabels = labels[half:len(labels)]
+    clf.fit(samples[0:half], labels[0:half])
+    fig, axes = plt.subplots(nrows = 1,ncols = 1,figsize = (4,4), dpi=600)
+    fn = [key for key,value in vehicles[0].items() if key not in ['aclass', 'class']]
+    print(fn)
+    tree.plot_tree(clf, feature_names = fn, class_names = [vc.name for vc in vClass][0:9])
+    fig.savefig('barna.png')
+    predicted = clf.predict(samples)
+    firstHalfPredicted = predicted[0:half]
+    secondHalfPredicted = predicted[half:len(predicted)]
+    #print(sklearn.metrics.classification_report(labels[half:len(labels)], secondHalfPredicted, target_names = [vc.name for vc in vClass][0:9]))
+    print(sklearn.metrics.classification_report(secondHalfLabels, secondHalfPredicted, target_names = [vc.name for vc in vClass][0:9]))
+    print(sklearn.metrics.classification_report(labels, aLabels, target_names = [vc.name for vc in vClass][0:9]))
+    #for v in samples[half:len(samples)]:
