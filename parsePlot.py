@@ -11,6 +11,7 @@ from enum import Enum
 import sklearn
 from sklearn import tree
 import math
+from tabulate import tabulate
 
 #textitext
 maxAxles = 10
@@ -21,17 +22,17 @@ directory = r'D:\Rohdaten\FRV_FREII1clean\Daten'
 class2Marker = { "nicht_klass_Kfz":dict(marker='x', c='black'), "Motorrad":dict(marker='4', c='yellow'), "PKW":dict(marker='o', c='blue'), "Kleintransporter":dict(marker='>', c='green'), "PKW_Anhaenger":dict(marker='s', c='cyan'), "LKW":dict(marker='+', c='red'), "LKW_Anhaenger":dict(marker='P', c='magenta'), "Sattel_Kfz":dict(marker='*', c='brown'), "Bus":dict(marker='_', c='DarkGoldenRod'), "ungueltig":dict(marker='None', c='DarkGoldenRod')  }
 
 class vClass(Enum):
-    nicht_klass_Kfz = 1
-    Motorrad = 2
-    PKW = 3
-    Kleintransporter = 4
-    PKW_Anhaenger = 5
-    LKW = 6
-    LKW_Anhaenger = 7
-    Sattel_Kfz = 8
-    Bus = 9
-    ungueltig = 10
-    fraglich = 11
+    nicht_klass_Kfz = 0
+    Motorrad = 1
+    PKW = 2
+    Kleintransporter = 3
+    PKW_Anhaenger = 4
+    LKW = 5
+    LKW_Anhaenger = 6
+    Sattel_Kfz = 7
+    Bus = 8
+    ungueltig = 9
+    fraglich = 10
 
 def parseWimFile(path):
     axleSpacings = []
@@ -255,10 +256,8 @@ def decisionTreeTest():
         inner()
 
     half = math.floor(len(labels)/2)
-    print("labels: " + str(len(labels)))
-    print("samples: " + str(len(samples)))
 
-    clf = tree.DecisionTreeClassifier(class_weight = 'balanced')#, max_depth = 2)
+    clf = tree.DecisionTreeClassifier(class_weight = 'balanced')#, max_depth = 3)#min_weight_fraction_leaf = 0.01)#, max_depth = 2)
     firstHalfSamples = samples[0:half]
     firstHalfLabels = labels[0:half]
     secondHalfSamples = samples[half:len(samples)]
@@ -275,4 +274,18 @@ def decisionTreeTest():
     #print(sklearn.metrics.classification_report(labels[half:len(labels)], secondHalfPredicted, target_names = [vc.name for vc in vClass][0:9]))
     print(sklearn.metrics.classification_report(secondHalfLabels, secondHalfPredicted, target_names = [vc.name for vc in vClass][0:9]))
     print(sklearn.metrics.classification_report(labels, aLabels, target_names = [vc.name for vc in vClass][0:9]))
-    #for v in samples[half:len(samples)]:
+    res = []
+    for i in range(0,9):
+        res.append([])
+        for j in range(0,9):
+            res[i].append(0)
+    for i in range(0, len(secondHalfPredicted)):
+        res[labels[half + i]][secondHalfPredicted[i]] += 1
+    print(res)
+    for vc in list(vClass)[0:9]:
+        res[vc.value].insert(0, vc.name)
+    print(res)
+    print(tabulate(res, headers = [vc.name for vc in vClass][0:9]))
+
+
+
