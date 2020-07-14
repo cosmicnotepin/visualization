@@ -13,7 +13,6 @@ from sklearn import tree
 import math
 from tabulate import tabulate
 
-#textitext
 maxAxles = 10
 #directory = r'C:\Users\borgro\svn\java\SensorFusion\Daten\Daten'
 #directory = r'D:\Rohdaten\FRV\Daten'
@@ -127,6 +126,7 @@ def plotVehiclesTest(vehicles, xDim='length', yDim='weight', zDim=None, classes=
     #vehicles = vehicles[19:20]
 
     #Gewicht der zweiten Hauptachse
+    #Laenge des zweiten Hauptachsabstands
     for vehicle in vehicles:
         foundSecondMain = False
         for i in range(0, maxAxles - 2):
@@ -146,14 +146,18 @@ def plotVehiclesTest(vehicles, xDim='length', yDim='weight', zDim=None, classes=
 
     df = DataFrame(vehicles)
 
-    #df['custom'] = abs(df['axleWeight0'] - df['axleWeight1']) # Differenz Achsgewichte
+    #Differenz Achsgewichte
+    #df['custom'] = abs(df['axleWeight0'] - df['axleWeight1'])
 
-    #Hauptachsabstaende
-    df['custom'] = (df['axleSpacing0'] > minAxleDistance).astype(int)
+    #Zahl der Hauptachsabstaende
+    df['mainSpacingCount'] = (df['axleSpacing0'] > minAxleDistance).astype(int)
     for i in range(1,maxAxles-1):
-        df['custom'] += (df['axleSpacing' + str(i)] > minAxleDistance).astype(int)
+        df['mainSpacingCount'] += (df['axleSpacing' + str(i)] > minAxleDistance).astype(int)
 
-    df = df[df['axles'] > 2]
+    #filter by axis count
+    #df = df[df['axles'] > 2]
+
+    #filter by first spacing
     #df = df[df['axleSpacing0'] > 5.7]
 
     #df['i0'] = (df['axleSpacing0'] < minAxleDistance).astype(int)
@@ -193,6 +197,7 @@ def fixData():
 
 def cleanupData():
     directory = r'D:\Rohdaten\FRV_FREII1clean'
+    #directory = r'D:\Rohdaten\FRKO120_07_07'
     vehicles = []
     noVDel = 0
     noPDel = 0
@@ -203,9 +208,11 @@ def cleanupData():
             line = vf.readline()
             pattern = '.*? length=(?P<length>.*?) weight=(?P<weight>.*?) maxAxleWeight=(?P<maweight>.*?) axles=(?P<axles>.*?) axleWeights=(?P<axleWeights>.*?) .*? numWimFiles=(?P<wim>[0-9]+) numAnprPics=(?P<anpr>[0-9]+) numIpCamPics=(?P<cam>[0-9]+) numScannerPics=(?P<scanner>[0-9]+)'
             match = re.match(pattern, line)
+            if(not match):
+                delete = True
 
             #no wim data or no pictures means it is useless
-            if(match.group('wim') == '0' or match.group('scanner') == '0'): 
+            if(match and ( match.group('wim') == '0' or match.group('scanner') == '0') or match.group('axles') == '1' ): 
                 delete = True
                 with contextlib.suppress(FileNotFoundError):
                     os.remove(entry.path.replace(".txt", ".cls")) 
@@ -263,29 +270,151 @@ def decisionTreeTest():
     secondHalfSamples = samples[half:len(samples)]
     secondHalfLabels = labels[half:len(labels)]
     clf.fit(samples[0:half], labels[0:half])
-    fig, axes = plt.subplots(nrows = 1,ncols = 1,figsize = (4,4), dpi=600)
+    #fig, axes = plt.subplots(nrows = 1,ncols = 1,figsize = (4,4), dpi=600)
     fn = [key for key,value in vehicles[0].items() if key not in ['aclass', 'class']]
     print(fn)
     tree.plot_tree(clf, feature_names = fn, class_names = [vc.name for vc in vClass][0:9])
-    fig.savefig('barna.png')
+    #fig.savefig('barna.png')
+
     predicted = clf.predict(samples)
     firstHalfPredicted = predicted[0:half]
     secondHalfPredicted = predicted[half:len(predicted)]
     #print(sklearn.metrics.classification_report(labels[half:len(labels)], secondHalfPredicted, target_names = [vc.name for vc in vClass][0:9]))
-    print(sklearn.metrics.classification_report(secondHalfLabels, secondHalfPredicted, target_names = [vc.name for vc in vClass][0:9]))
-    print(sklearn.metrics.classification_report(labels, aLabels, target_names = [vc.name for vc in vClass][0:9]))
-    res = []
+    #print(sklearn.metrics.classification_report(secondHalfLabels, secondHalfPredicted, target_names = [vc.name for vc in vClass][0:9]))
+    #print(sklearn.metrics.classification_report(labels, aLabels, target_names = [vc.name for vc in vClass][0:9]))
+    dtRes = []
     for i in range(0,9):
-        res.append([])
+        dtRes.append([])
         for j in range(0,9):
-            res[i].append(0)
+            dtRes[i].append(0)
     for i in range(0, len(secondHalfPredicted)):
-        res[labels[half + i]][secondHalfPredicted[i]] += 1
-    print(res)
+        dtRes[labels[half + i]][secondHalfPredicted[i]] += 1
+    print(dtRes)
+
+    aRes = []
+    for i in range(0,9):
+        aRes.append([])
+        for j in range(0,9):
+            aRes[i].append(0)
+    for i in range(0, len(labels)):
+        aRes[labels[i]][aLabels[i]] += 1
+    print(aRes)
+    printTLSRes(aRes)
+    #for vc in list(vClass)[0:9]:
+    #    res[vc.value].insert(0, vc.name)
+    #print(res)
+    #print(tabulate(res, headers = [vc.name for vc in vClass][0:9]))
+
+def printTLSRes(M):
+    S = []
     for vc in list(vClass)[0:9]:
-        res[vc.value].insert(0, vc.name)
-    print(res)
-    print(tabulate(res, headers = [vc.name for vc in vClass][0:9]))
+        S.append(sum(M[vc.value]))
+
+    print(S)
+
+    A = []
+    for vc in list(vClass)[0:9]:
+        A.append(S[vc.value]/sum(S))
+
+    print(A)
+
+    E1 = []
+    for vc in list(vClass)[0:9]:
+        S_x = S[vc.value]
+        if(S_x == 0):
+            E1.append(0)
+        else:
+            E1.append(M[vc.value][vc.value]/S[vc.value])
+
+    print()
+    print("Detektionsrate E1")
+    print(tabulate([E1], headers = [vc.name for vc in vClass][0:9]))
+
+    P_E1 = []
+    for vc in list(vClass)[0:9]:
+        M_xx = M[vc.value][vc.value]
+        Z = 1.96
+        S_x = S[vc.value]
+        if(S_x == 0):
+            P_E1.append(0)
+        else:
+            P_E1.append((2*M_xx + Z**2 - Z*math.sqrt(Z**2 + 4*M_xx*(1 - M_xx/S_x)))/(2*(S_x + Z**2)))
+
+    print()
+    print("Abgesicherte Detektionsrate E1")
+    print(tabulate([P_E1], headers = [vc.name for vc in vClass][0:9]))
+
+    #normalize M for E2 calculations
+    tlsProportions = [0, 0.007, 0.75, 0.06, 0.01, 0.05, 0.05, 0.07, 0.003]
+    M_n = []
+    M_n.append([0]*9)
+    for vc in list(vClass)[1:9]:
+        c_norm = []
+        for vci in list(vClass)[0:9]:
+            c_norm.append(M[vc.value][vci.value] * (tlsProportions[vc.value]/A[vc.value]))
+        M_n.append(c_norm)
+    
+    print()
+    print("M")
+    print(tabulate(M, headers = [vc.name for vc in vClass][0:9]))
+    print("M_n")
+    print(tabulate(M_n, headers = [vc.name for vc in vClass][0:9]))
+
+
+    S_n = []
+    for vc in list(vClass)[0:9]:
+        S_n.append(sum(M_n[vc.value]))
+
+    print()
+    print("S_n")
+    print(S_n)
+
+
+    E2 = []
+    for vc in list(vClass)[0:9]:
+        S_i = S_n[vc.value]
+        if(S_i == 0):
+            E2.append(0)
+        else:
+            SUM_M_xi = 0
+            for x in range(0,9):
+                SUM_M_xi += M_n[x][vc.value]
+
+            M_ii = M_n[vc.value][vc.value]
+            E2.append(1 - ((SUM_M_xi - M_ii)/S_i))
+
+    print()
+    print("Detektionsrate E2")
+    print(tabulate([E2], headers = [vc.name for vc in vClass][0:9]))
+
+    P_E2 = []
+    for vc in list(vClass)[0:9]:
+        SUM_M_xi = 0
+        for x in range(0,9):
+            SUM_M_xi += M_n[x][vc.value]
+        M_ii = M_n[vc.value][vc.value]
+        M_xx = SUM_M_xi - M_ii
+        Z = 1.96
+        S_x = S_n[vc.value]
+        if(S_x == 0):
+            P_E2.append(0)
+        else:
+            if(M_xx/S_x>1):
+                print(vc.name)
+                print(x)
+            P_E2.append(1 - (2*M_xx + Z**2 + Z*math.sqrt(Z**2 + 4*M_xx*(1 - M_xx/S_x)))/(2*(S_x + Z**2)))
+
+    print()
+    print("Abgesicherte Detektionsrate E2")
+    print(tabulate([P_E2], headers = [vc.name for vc in vClass][0:9]))
+
+
+
+
+
+
+
+
 
 
 
