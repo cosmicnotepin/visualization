@@ -4,6 +4,9 @@ from tabulate import tabulate
 import globs
 
 def printTLSRes(M):
+    """
+    TLS IV.1.3 (p. 106ff)
+    """
     S = []
     for vc in list(globs.vClass)[0:9]:
         S.append(sum(M[vc.value]))
@@ -20,9 +23,6 @@ def printTLSRes(M):
         else:
             E1.append(M[vc.value][vc.value]/S[vc.value])
 
-    print("\nDetektionsrate E1")
-    print("\n" + tabulate([E1], headers = [vc.name for vc in globs.vClass][0:9]))
-
     P_E1 = []
     for vc in list(globs.vClass)[0:9]:
         M_xx = M[vc.value][vc.value]
@@ -33,9 +33,6 @@ def printTLSRes(M):
         else:
             P_E1.append((2*M_xx + Z**2 - Z*math.sqrt(Z**2 + 4*M_xx*(1 - M_xx/S_x)))/(2*(S_x + Z**2)))
 
-    print("\nAbgesicherte Detektionsrate E1")
-    print("\n" + tabulate([P_E1], headers = [vc.name for vc in globs.vClass][0:9]))
-
     #normalize M for E2 calculations
     tlsProportions = [0, 0.007, 0.75, 0.06, 0.01, 0.05, 0.05, 0.07, 0.003]
     M_n = []
@@ -43,22 +40,15 @@ def printTLSRes(M):
     for vc in list(globs.vClass)[1:9]:
         c_norm = []
         for vci in list(globs.vClass)[0:9]:
-            c_norm.append(M[vc.value][vci.value] * (tlsProportions[vc.value]/A[vc.value]))
+            if(A[vc.value] ==0):
+                c_norm.append(0)
+            else:
+                c_norm.append(M[vc.value][vci.value] * (tlsProportions[vc.value]/A[vc.value]))
         M_n.append(c_norm)
     
-    #print("\nM")
-    #print(tabulate(M, headers = [vc.name for vc in globs.vClass][0:9]))
-    #print("M_n")
-    #print(tabulate(M_n, headers = [vc.name for vc in globs.vClass][0:9]))
-
-
     S_n = []
     for vc in list(globs.vClass)[0:9]:
         S_n.append(sum(M_n[vc.value]))
-
-    #print("\nS_n")
-    #print(S_n)
-
 
     E2 = []
     for vc in list(globs.vClass)[0:9]:
@@ -72,9 +62,6 @@ def printTLSRes(M):
 
             M_ii = M_n[vc.value][vc.value]
             E2.append(1 - ((SUM_M_xi - M_ii)/S_i))
-
-    print("\nDetektionsrate E2")
-    print("\n" + tabulate([E2], headers = [vc.name for vc in globs.vClass][0:9]))
 
     P_E2 = []
     for vc in list(globs.vClass)[0:9]:
@@ -93,5 +80,5 @@ def printTLSRes(M):
                 print(x)
             P_E2.append(1 - (2*M_xx + Z**2 + Z*math.sqrt(Z**2 + 4*M_xx*(1 - M_xx/S_x)))/(2*(S_x + Z**2)))
 
-    print("\nAbgesicherte Detektionsrate E2")
-    print("\n" + tabulate([P_E2], headers = [vc.name for vc in globs.vClass][0:9]))
+    print("Abgesicherte Detektionsraten E1, E2")
+    print(tabulate([P_E1, P_E2], headers = [vc.name for vc in globs.vClass][0:9]))
