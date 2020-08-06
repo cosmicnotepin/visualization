@@ -68,7 +68,8 @@ def parseVehicleFiles(directory):
 
                 vf.readline() #skip empty line
                 axleSpacings, vehicleLoopLength = parseWimFile(directory, vf.readline())
-                vehicle['vehicleLoopLength'] = vehicleLoopLength
+                #loopLength makes no difference to knn
+                #vehicle['vehicleLoopLength'] = vehicleLoopLength
                 vehicle['axleSpacingsSum'] = 0
                 for i in range(globs.maxAxles - 1):
                     if(i<len( axleSpacings )):
@@ -76,7 +77,13 @@ def parseVehicleFiles(directory):
                         vehicle['axleSpacingsSum'] = vehicle['axleSpacingsSum'] + axleSpacings[i]
                     else:
                         vehicle['axleSpacing' + str(i)] = 0
-                vehicle['overhang'] = vehicleLoopLength - vehicle['axleSpacingsSum']
+                #overhang worsens knn result
+                #vehicle['overhang'] = vehicleLoopLength - vehicle['axleSpacingsSum']
+                #numMainAxleSpacings makes no difference to knn
+                #vehicle['numMainAxleSpacings'] = 0
+                #for spacing in axleSpacings:
+                #    if (spacing > 2):
+                #        vehicle['numMainAxleSpacings'] += 1
                 vehicles.append(vehicle)
         except FileNotFoundError:
             continue #no cls-file: skip

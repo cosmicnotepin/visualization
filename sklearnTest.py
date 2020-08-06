@@ -35,6 +35,7 @@ def parseForSklearn(directory):
     parse vehicles and divide into samples, labels(true class from manual classification) and alabels(class from java 8+1 classification)
     """
     vehicles = parse.parseVehicleFiles(directory)
+    print(vehicles[0].items())
     #TODO
     global fn 
     fn = [key for key,value in vehicles[0].items() if key not in ['aclass', 'class']]
@@ -55,6 +56,8 @@ def parseForSklearn(directory):
                     aLabels.append(globs.vClass[v[key]].value)
                 else:
                     sample.append(v[key])
+                #elif (key == 'weight' or key == 'axleSpacing0' or key == 'axles' or key == 'overhang' or key == 'axleSpacingSum'):
+                #    sample.append(v[key])
 
             samples.append(sample) 
         inner()
@@ -206,8 +209,29 @@ def confusionMatrix(labels, predicted):
         cm[labels[i]][predicted[i]] += 1
     return cm
 
+def kNeighborsStupidTest(samples, labels):
+    #print("\nKNeighbors uniform========================================")
+    #clf = neighbors.KNeighborsClassifier()
+    #clf.fit(strain,ltrain)
+    #predicted = clf.predict(stest)
+    #printClfRes(ltest, predicted)
+    #visualizeCMx2(clf, stest, ltest, 'knn uniform')
+    #print("\nKNeighbors uniform n_neighbors = 1 ========================================")
+    #clf = neighbors.KNeighborsClassifier(1)
+    #clf.fit(strain,ltrain)
+    #predicted = clf.predict(stest)
+    #visualizeCMx2(clf, stest, ltest, 'knn uniform 1 neighbor')
+    #printClfRes(ltest, predicted)
+    print("\nKNeighbors stupid distance========================================")
+    #clf = make_pipeline(StandardScaler(), neighbors.KNeighborsClassifier(weights = 'distance'))
+    clf = neighbors.KNeighborsClassifier(n_neighbors = 15, weights = 'distance')
+    clf.fit(samples, labels)
+    predicted = clf.predict(samples)
+    visualizeCMx2(clf, samples, labels, 'knn stupid distance')
+    printClfRes(labels, predicted)
+    print(sklearn.metrics.classification_report(labels, predicted, target_names = [vc.name for vc in globs.vClass][1:9]))
+
 def kNeighborsTest(strain, stest, ltrain, ltest):
-    dump(stest[:1], 'oneVehicle.joblib')
     #print("\nKNeighbors uniform========================================")
     #clf = neighbors.KNeighborsClassifier()
     #clf.fit(strain,ltrain)
@@ -222,8 +246,8 @@ def kNeighborsTest(strain, stest, ltrain, ltest):
     #printClfRes(ltest, predicted)
     print("\nKNeighbors distance========================================")
     clf = make_pipeline(StandardScaler(), neighbors.KNeighborsClassifier(weights = 'distance'))
+    #clf = neighbors.KNeighborsClassifier(weights = 'distance')
     clf.fit(strain,ltrain)
-    dump(clf, 'knn.joblib')
     predicted = clf.predict(stest)
     visualizeCMx2(clf, stest, ltest, 'knn distance')
     printClfRes(ltest, predicted)
@@ -311,10 +335,11 @@ def overview():
     #SVMLinearTest(strain, stest, ltrain, ltest)
     #SVMRBF(strain, stest, ltrain, ltest)
     #RFTest(strain, stest, ltrain, ltest)
-    #kNeighborsTest(strain, stest, ltrain, ltest)
+    kNeighborsTest(strain, stest, ltrain, ltest)
+    #kNeighborsStupidTest(samples, labels)
     #knnGSTest(strain, stest, ltrain, ltest)
     #rNeighborsTest(strain, stest, ltrain, ltest)
-    pmmlTest(strain, stest, ltrain, ltest)
+    #pmmlTest(strain, stest, ltrain, ltest)
     plt.show()
 
 overview()
