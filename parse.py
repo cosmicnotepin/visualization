@@ -2,6 +2,8 @@ import re
 import os
 from datetime import datetime
 import contextlib
+import itertools
+from collections import defaultdict
 
 import globs
 
@@ -92,3 +94,41 @@ def parseVehicleFiles(directory):
 
     return vehicles
 
+def parseDebugLog(path):
+    pattern = '.*? VHCL (?P<id>\d*?): (?P<mergeOrData>.*?) .*'
+    dataPattern = '.*? VHCL (?P<id>\d*?): adding scanner data .*? min_y=(?P<min_y>.*?) max_y=(?P<max_y>.*?) height=(?P<height>.*?) width=(?P<width>.*?) scantime=(?P<scantime>.*?) .*'
+    mergePattern = '.*? VHCL (?P<id>\d*?): combining vehicles (?P<vhcl1>.*?) and (?P<vhcl2>.*)'
+    scanObjs = defaultdict(list) 
+    merges = defaultdict(list)
+    with open(path, 'r') as dl:
+        i = itertools.count()
+        for line in dl:
+            if(next(i) > 100):
+                break
+            match = re.match(pattern, line)
+            if(match):
+                if(match.group('mergeOrData') == 'adding'):
+                    dataMatch = re.match(dataPattern, line)
+                    id = int(dataMatch.group('id')) 
+                    scanObj = [
+                            float(dataMatch.group('min_y').replace(',', '.')),
+                            float(dataMatch.group('max_y').replace(',', '.')),
+                            float(dataMatch.group('height').replace(',', '.')),
+                            float(dataMatch.group('width').replace(',', '.')),
+                            datetime.strptime(dataMatch.group('scantime'), '%H:%M:%S.%f')
+                            ]
+                    scanObjs[id].append(scanObj)
+                elif(match.group('mergeOrData') == 'combining'):
+                    mergeMatch = re.match(mergePattern, line)
+                    remainingVhcl = int(mergeMatch.group('vhcl1'))
+                    mergedVhcl = int(mergeMatch.group('vhcl2'))
+                    merges[remainingVhcl].append(mergedVhcl)
+
+    #scanObjs = merge(scanObjs, merges) 
+    #vehicle['length'] = float(match.group('length').replace(',', '.'))
+
+    print('wtf: ' + str(scanObjs))
+    print('wtf2: ' + str(merges))
+    return scanObjs
+
+parseDebugLog(r'D:\Rohdaten\FRV_FREII1clean\Logs\2020-05-25_00-00-00_NKP-FREII1-debug.log')
