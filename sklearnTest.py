@@ -54,10 +54,10 @@ def parseForSklearn(directory):
                         return
                 elif (key == 'aclass'):
                     aLabels.append(globs.vClass[v[key]].value)
-                else:
-                    sample.append(v[key])
-                #elif (key == 'weight' or key == 'axleSpacing0' or key == 'axles' or key == 'overhang' or key == 'axleSpacingSum'):
+                #else:
                 #    sample.append(v[key])
+                elif (key == 'height' or key == 'width'or key == 'axleSpacingSum'):
+                    sample.append(v[key])
 
             samples.append(sample) 
         inner()

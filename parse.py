@@ -47,13 +47,15 @@ def parseVehicleFiles(directory):
         try:
             with open(entry.path, 'r') as vf:
                 line = vf.readline()
-                pattern = '.*? length=(?P<length>.*?) weight=(?P<weight>.*?) maxAxleWeight=(?P<maweight>.*?) axles=(?P<axles>.*?) axleWeights=(?P<axleWeights>.*?) .*? numWimFiles=(?P<wim>[0-9]+) numAnprPics=(?P<anpr>[0-9]+) numIpCamPics=(?P<cam>[0-9]+) numScannerPics=(?P<scanner>[0-9]+)'
+                pattern = '.*? height=(?P<height>.*?) width=(?P<width>.*?) length=(?P<length>.*?) weight=(?P<weight>.*?) maxAxleWeight=(?P<maweight>.*?) axles=(?P<axles>.*?) axleWeights=(?P<axleWeights>.*?) .*? numWimFiles=(?P<wim>[0-9]+) numAnprPics=(?P<anpr>[0-9]+) numIpCamPics=(?P<cam>[0-9]+) numScannerPics=(?P<scanner>[0-9]+)'
                 match = re.match(pattern, line)
                 if(match.group('length') == '-1,00'):
                     continue #invalid vehicle
                 vehicle['length'] = float(match.group('length').replace(',', '.'))
                 vehicle['axles'] = float(match.group('axles').replace(',', '.'))
                 vehicle['weight'] = float(match.group('weight').replace(',', '.'))
+                vehicle['height'] = float(match.group('height').replace(',', '.'))
+                vehicle['width'] = float(match.group('width').replace(',', '.'))
                 axleWeights = [float(x.replace(',', '.')) for x in match.group('axleWeights').split(';')]
                 for i in range(globs.maxAxles):
                     if(i<len(axleWeights)):
