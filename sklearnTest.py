@@ -28,46 +28,26 @@ import parse
 import tls
 import globs
 
-fn = 0
+fn = []
 
-def parseForSklearn(directory):
+def parseForSklearn(vehicles, features = 'all', classMapper=globs.AchtPlus1To8Plus1):
     """
-    parse vehicles and divide into samples, labels(true class from manual classification) and alabels(class from java 8+1 classification)
+    expects an array of vehicle dicts, a list of feature names, a mapping from 8+1 to the desired class schema
+    divides into samples(containing only features==features), labels(true class from manual classification, mapped wich classMapper) and alabels(class from java 8+1 classification, mapped wich classMapper)
     """
-    vehicles = parse.parseVehicleFiles(directory)
-    print(vehicles[0].items())
-    #TODO
-    global fn 
-    fn = [key for key,value in vehicles[0].items() if key not in ['aclass', 'class']]
-    samples = []
-    labels = []
-    aLabels = []
-    for v in vehicles:
-        sample = []
-        def inner():
-            for key, value in v.items():
-                if (key == 'class'):
-                    if (v[key] in [vc.name for vc in globs.vClass][0:9]):
-                        labels.append(globs.vClass[v[key]].value)
-                    else:
-                        print(v[key])
-                        return
-                elif (key == 'aclass'):
-                    aLabels.append(globs.vClass[v[key]].value)
-                #else:
-                #    sample.append(v[key])
-                elif (key == 'height' or key == 'width'or key == 'axleSpacingSum'):
-                    sample.append(v[key])
-
-            samples.append(sample) 
-        inner()
+    df = pd.DataFrame(vehicles)
+    if(features == 'all'):
+        features = df.columns.difference(['class', 'aClass', 'scanObjs'])
+    samples = df[features]
+    labels = df['class']
+    aLabels = df['aClass']
 
     return samples, labels, aLabels
 
 def visualizeCMx2(clf, stest, ltest, identifier):
-    disp = plot_confusion_matrix(clf, stest, ltest, display_labels=[vc.name for vc in globs.vClass][1:9], cmap=plt.cm.Blues, normalize='true') 
+    disp = plot_confusion_matrix(clf, stest, ltest, labels=globs.labels, cmap=plt.cm.Blues, normalize='true') 
     plt.title(identifier + ' rn')
-    disp = plot_confusion_matrix(clf, stest, ltest, display_labels=[vc.name for vc in globs.vClass][1:9], cmap=plt.cm.Blues, normalize='pred') 
+    disp = plot_confusion_matrix(clf, stest, ltest, labels=globs.labels, cmap=plt.cm.Blues, normalize='pred') 
     plt.title(identifier + ' cn')
 
 def bghTest(labels, aLabels):
@@ -81,44 +61,6 @@ def bghTest(labels, aLabels):
     disp = disp.plot(include_values=True, cmap=plt.cm.Blues, ax=None, xticks_rotation='horizontal') 
     plt.title('bgh cn')
     printClfRes(labels, aLabels)
-
-def DTCheck():
-    """
-    finding solutions to PKW vs Kleintransporter
-    """
-    directory = r'D:\Rohdaten\FRV_FREII1clean\Daten'
-    samples, labels, aLabels = parseForSklearn(directory)
-    s = []
-    l = []
-    for i in range(0,len(labels)):
-        if (labels[i] in [globs.vClass['PKW'].value, globs.vClass['Kleintransporter'].value]):
-            s.append(samples[i])
-            l.append(labels[i])
-
-    samples = s
-    labels = l
-    strain, stest, ltrain, ltest = train_test_split(samples, labels, test_size = 0.5, random_state = 42)
-    clf = tree.DecisionTreeClassifier(max_depth=3, min_samples_split=20)#min_weight_fraction_leaf = 0.01)#, max_depth = 2)
-    #clf = tree.DecisionTreeClassifier(class_weight = 'balanced', max_depth=3, min_samples_split=20)#min_weight_fraction_leaf = 0.01)#, max_depth = 2)
-    #fit on the first half of the data
-    clf.fit(strain, ltrain)
-
-    fig, axes = plt.subplots(nrows = 1,ncols = 1,figsize = (4,4), dpi=600)
-    #fn = [key for key,value in vehicles[0].items() if key not in ['aclass', 'class']]
-    #print(fn)
-    tree.plot_tree(clf, feature_names = fn, class_names = [vc.name for vc in globs.vClass][2:9])
-    fig.savefig('pvk.png')
-
-    #predict all data
-    predicted = clf.predict(stest)
-    #but only use second half for evaluation
-
-    #print(sklearn.metrics.classification_report(labels[half:len(labels)], secondHalfPredicted, target_names = [vc.name for vc in globs.vClass][0:9]))
-    #print(sklearn.metrics.classification_report(secondHalfLabels, secondHalfPredicted, target_names = [vc.name for vc in globs.vClass][0:9]))
-    #print(sklearn.metrics.classification_report(labels, aLabels, target_names = [vc.name for vc in globs.vClass][0:9]))
-
-    visualizeCMx2(clf, stest, ltest, 'DT')
-    printClfRes(ltest, predicted)
 
 def RFTest(strain, stest, ltrain, ltest):
     print("\nRF========================================")
@@ -152,19 +94,6 @@ def SVMLinearTest(strain, stest, ltrain, ltest):
     visualizeCMx2(clf, stest, ltest, 'SVMLinear')
     printClfRes(ltest, predicted)
 
-
-def pmmlTest(strain, stest, ltrain, ltest):
-    pipeline = PMMLPipeline([
-    	("classifier", tree.DecisionTreeClassifier())
-    ])
-    pipeline.fit(strain, ltrain)
-    
-    dump(pipeline, "model.pkl.z", protocol=2)
-    clf = load("model.pkl.z")
-    print(clf.predict(stest[:1]))
-    #pipeline.verify(strain[:10])
-    #sklearn2pmml(pipeline, "model.pmml")#, with_repr = False)
-
 def DTTest(strain, stest, ltrain, ltest):
     """
     playing around with sklearn decision trees, comparing them with current classification
@@ -176,28 +105,12 @@ def DTTest(strain, stest, ltrain, ltest):
     #fit on the first half of the data
     clf.fit(strain, ltrain)
 
-    #fig, axes = plt.subplots(nrows = 1,ncols = 1,figsize = (4,4), dpi=600)
-    #fn = [key for key,value in vehicles[0].items() if key not in ['aclass', 'class']]
-    #print(fn)
-    #tree.plot_tree(clf, feature_names = fn, class_names = [vc.name for vc in globs.vClass][0:9])
-    #fig.savefig('barna.png')
-
-    #predict all data
     predicted = clf.predict(stest)
-    #but only use second half for evaluation
-
-    #print(sklearn.metrics.classification_report(labels[half:len(labels)], secondHalfPredicted, target_names = [vc.name for vc in globs.vClass][0:9]))
-    #print(sklearn.metrics.classification_report(secondHalfLabels, secondHalfPredicted, target_names = [vc.name for vc in globs.vClass][0:9]))
-    #print(sklearn.metrics.classification_report(labels, aLabels, target_names = [vc.name for vc in globs.vClass][0:9]))
-
     visualizeCMx2(clf, stest, ltest, 'DT')
     printClfRes(ltest, predicted)
 
 def printClfRes(labels, predicted):
     tls.printTLSRes(confusionMatrix(labels, predicted))
-    #for vc in list(globs.vClass)[0:9]:
-    #    aRes[vc.value].insert(0, vc.name)
-    #print(tabulate(aRes, headers = [vc.name for vc in globs.vClass][0:9]))
 
 def confusionMatrix(labels, predicted):
     cm = []
@@ -209,55 +122,14 @@ def confusionMatrix(labels, predicted):
         cm[labels[i]][predicted[i]] += 1
     return cm
 
-def kNeighborsStupidTest(samples, labels):
-    #print("\nKNeighbors uniform========================================")
-    #clf = neighbors.KNeighborsClassifier()
-    #clf.fit(strain,ltrain)
-    #predicted = clf.predict(stest)
-    #printClfRes(ltest, predicted)
-    #visualizeCMx2(clf, stest, ltest, 'knn uniform')
-    #print("\nKNeighbors uniform n_neighbors = 1 ========================================")
-    #clf = neighbors.KNeighborsClassifier(1)
-    #clf.fit(strain,ltrain)
-    #predicted = clf.predict(stest)
-    #visualizeCMx2(clf, stest, ltest, 'knn uniform 1 neighbor')
-    #printClfRes(ltest, predicted)
-    print("\nKNeighbors stupid distance========================================")
-    #clf = make_pipeline(StandardScaler(), neighbors.KNeighborsClassifier(weights = 'distance'))
-    clf = neighbors.KNeighborsClassifier(n_neighbors = 15, weights = 'distance')
-    clf.fit(samples, labels)
-    predicted = clf.predict(samples)
-    visualizeCMx2(clf, samples, labels, 'knn stupid distance')
-    printClfRes(labels, predicted)
-    print(sklearn.metrics.classification_report(labels, predicted, target_names = [vc.name for vc in globs.vClass][1:9]))
-
 def kNeighborsTest(strain, stest, ltrain, ltest):
-    #print("\nKNeighbors uniform========================================")
-    #clf = neighbors.KNeighborsClassifier()
-    #clf.fit(strain,ltrain)
-    #predicted = clf.predict(stest)
-    #printClfRes(ltest, predicted)
-    #visualizeCMx2(clf, stest, ltest, 'knn uniform')
-    #print("\nKNeighbors uniform n_neighbors = 1 ========================================")
-    #clf = neighbors.KNeighborsClassifier(1)
-    #clf.fit(strain,ltrain)
-    #predicted = clf.predict(stest)
-    #visualizeCMx2(clf, stest, ltest, 'knn uniform 1 neighbor')
-    #printClfRes(ltest, predicted)
     print("\nKNeighbors distance========================================")
     clf = make_pipeline(StandardScaler(), neighbors.KNeighborsClassifier(weights = 'distance'))
-    #clf = neighbors.KNeighborsClassifier(weights = 'distance')
     clf.fit(strain,ltrain)
     predicted = clf.predict(stest)
     visualizeCMx2(clf, stest, ltest, 'knn distance')
-    printClfRes(ltest, predicted)
-    print(sklearn.metrics.classification_report(ltest, predicted, target_names = [vc.name for vc in globs.vClass][1:9]))
-    #print("\nKNeighbors distance n_neighbors = 1========================================")
-    #clf = neighbors.KNeighborsClassifier(1, weights = 'distance')
-    #clf.fit(strain,ltrain)
-    #predicted = clf.predict(stest)
-    #visualizeCMx2(clf, stest, ltest, 'knn distance 1 neighbor')
     #printClfRes(ltest, predicted)
+    print(sklearn.metrics.classification_report(ltest, predicted))#[globs.vClass(cls).name for cls in clf.classes_]))
 
 def knnGSTest(strain, stest, ltrain, ltest):
     #List Hyperparameters that we want to tune.
@@ -278,7 +150,7 @@ def knnGSTest(strain, stest, ltrain, ltest):
     visualizeCMx2(clf, stest, ltest, 'knn gridsearchcv')
     predicted = clf.predict(stest)
     printClfRes(ltest, predicted)
-    print(sklearn.metrics.classification_report(ltest, predicted, target_names = [vc.name for vc in globs.vClass][1:9]))
+    print(sklearn.metrics.classification_report(ltest, predicted, target_names = [globs.vClass(cls).name for cls in clf.classes_]))
 
 def rNeighborsTest(strain, stest, ltrain, ltest):
     print("\nRNeighbors========================================")
@@ -328,7 +200,7 @@ def fc2():
 def overview():
     #directory = r'D:\Rohdaten\FREII12020-07-16-clean\Daten'
     directory = r'D:\Rohdaten\FRV_FREII1clean\Daten'
-    samples, labels, aLabels = parseForSklearn(directory)
+    samples, labels, aLabels = parseForSklearn(directory, globs.AchtPlus1To2)
     strain, stest, ltrain, ltest = train_test_split(samples, labels, test_size = 0.5, random_state = 42)
     #bghTest(labels, aLabels)
     #DTTest(strain, stest, ltrain, ltest)
@@ -342,8 +214,13 @@ def overview():
     #pmmlTest(strain, stest, ltrain, ltest)
     plt.show()
 
-overview()
-#DTCheck()
-#featureCheck()
-#fc2()
+def lso():
+    vhcls = parse.parseVehicleFilesInSubDirs(globs.laserScannerOnlyDirs)
+    parse.addExtractedFeatures(vhcls)
+    samples, labels, aLabels = parseForSklearn(vhcls, features=['height',  'width', 'minWidth', 'minHeight', 'relPosMinWidth', 'relPosMinHeight', 'relPosMaxWidth', 'relPosMaxHeight', 'volume'])
+    strain, stest, ltrain, ltest = train_test_split(samples, labels, test_size = 0.5, random_state = 42)
+    kNeighborsTest(strain, stest, ltrain, ltest)
+    plt.show()
+
+lso()
 

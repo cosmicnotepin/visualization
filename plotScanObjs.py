@@ -14,7 +14,6 @@ def plotDebugLog(path=r'D:\Rohdaten\FRV_FREII1clean\Logs\2020-05-25_00-00-00_NKP
         request = int(input('id to display: '))
 
 def plotVehicle(vhcl):
-    vhcl.sort(key=lambda x: x['scantime'], reverse=True)
     fig = plt.figure()
     ax = Axes3D(fig)
     ax.set_xlabel('x')
@@ -24,17 +23,11 @@ def plotVehicle(vhcl):
     ax.set_zlim(bottom=0, top=30)
     ax.set_xlim(left=0, right=30)
     for scanObj in vhcl:
-        rect = Rectangle([0, scanObj['min_y']], scanObj['width'], scanObj['height'], fill=False)
+        rect = Rectangle([scanObj['min_y'], 0], scanObj['width'], scanObj['height'], fill=False)
         ax.add_patch(rect)
-        #print(scanObj['scantime'])
-        #print(vhcl[0]['scantime'])
-        #print(scanObj['scantime'] - vhcl[0]['scantime'])
         art3d.pathpatch_2d_to_3d(rect, z=-1*(scanObj['scantime'] - vhcl[0]['scantime'])*11, zdir="x") # 11 ~ 40km/h in m/s
-    #ax.relim()
-    #ax.autoscale_view()
     plt.show()
     #plt.draw()
     #plt.pause(0.001)
-    #ax.autoscale(tight=True)
 
 plotDebugLog()
