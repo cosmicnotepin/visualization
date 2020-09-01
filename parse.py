@@ -136,7 +136,7 @@ def parseVehicleFilesInSubDirs(directory=globs.laserScannerOnlyDir):
 def addExtractedFeatures(vehicles):
     """
     all features that have to be calculated from parsed data are added here
-    for example: sums or differences of other features like axleSpacingSum
+    for example: sums or differences of other features like axleSpacingsSum
     """
     for vhcl in vehicles: 
         vhcl['axleSpacingsSum'] = 0

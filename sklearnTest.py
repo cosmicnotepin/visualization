@@ -129,7 +129,7 @@ def kNeighborsTest(strain, stest, ltrain, ltest):
     predicted = clf.predict(stest)
     visualizeCMx2(clf, stest, ltest, 'knn distance')
     #printClfRes(ltest, predicted)
-    print(sklearn.metrics.classification_report(ltest, predicted))#[globs.vClass(cls).name for cls in clf.classes_]))
+    print(sklearn.metrics.classification_report(ltest, predicted))
 
 def knnGSTest(strain, stest, ltrain, ltest):
     #List Hyperparameters that we want to tune.
@@ -215,9 +215,10 @@ def overview():
     plt.show()
 
 def lso():
-    vhcls = parse.parseVehicleFilesInSubDirs(globs.laserScannerOnlyDirs)
+    vhcls = parse.parseVehicleFilesInSubDirs(globs.laserScannerOnlyDir)
     parse.addExtractedFeatures(vhcls)
-    samples, labels, aLabels = parseForSklearn(vhcls, features=['height',  'width', 'minWidth', 'minHeight', 'relPosMinWidth', 'relPosMinHeight', 'relPosMaxWidth', 'relPosMaxHeight', 'volume'])
+    #samples, labels, aLabels = parseForSklearn(vhcls, features=['height',  'width', 'minWidth', 'minHeight', 'relPosMinWidth', 'relPosMinHeight', 'relPosMaxWidth', 'relPosMaxHeight', 'volume'])
+    samples, labels, aLabels = parseForSklearn(vhcls, features=[ 'axleSpacingsSum', 'weight', 'axles', 'axleWeight0', 'axleWeight1', 'axleWeight2', 'axleWeight3', 'axleWeight4', 'axleWeight5', 'axleWeight6', 'axleWeight7', 'axleWeight8', 'axleWeight9', 'axleSpacing0', 'axleSpacing1', 'axleSpacing2', 'axleSpacing3', 'axleSpacing4', 'axleSpacing5', 'axleSpacing6', 'axleSpacing7', 'axleSpacing8'])
     strain, stest, ltrain, ltest = train_test_split(samples, labels, test_size = 0.5, random_state = 42)
     kNeighborsTest(strain, stest, ltrain, ltest)
     plt.show()
