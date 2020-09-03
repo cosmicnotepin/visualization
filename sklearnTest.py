@@ -122,12 +122,12 @@ def confusionMatrix(labels, predicted):
         cm[labels[i]][predicted[i]] += 1
     return cm
 
-def kNeighborsTest(strain, stest, ltrain, ltest):
-    print("\nKNeighbors distance========================================")
+def kNeighborsTest(strain, stest, ltrain, ltest, identifier):
+    print("\nKNeighbors distance " + identifier + " ========================================")
     clf = make_pipeline(StandardScaler(), neighbors.KNeighborsClassifier(weights = 'distance'))
     clf.fit(strain,ltrain)
     predicted = clf.predict(stest)
-    visualizeCMx2(clf, stest, ltest, 'knn distance')
+    visualizeCMx2(clf, stest, ltest, identifier)
     #printClfRes(ltest, predicted)
     print(sklearn.metrics.classification_report(ltest, predicted))
 
@@ -160,14 +160,12 @@ def rNeighborsTest(strain, stest, ltrain, ltest):
     printClfRes(ltest, predicted)
 
 def featureCheck():
-    directory = r'D:\Rohdaten\FRV_FREII1clean\Daten'
-    samples, labels, aLabels = parseForSklearn(directory)
-    #data = pd.read_csv("D://Blogs//train.csv")
-    #X = data.iloc[:,0:20]  #independent columns
-    #y = data.iloc[:,-1]    #target column i.e price range#apply SelectKBest class to extract top 10 best features
-    X = pd.DataFrame(samples)
-    y = pd.DataFrame(labels)
-    bestfeatures = SelectKBest(score_func=chi2, k=10)
+    vhcls = parse.parseVehicleFilesInSubDirs(globs.laserScannerOnlyDir)
+    parse.addExtractedFeatures(vhcls)
+    samples, labels, aLabels = parseForSklearn(vhcls, features=['height',  'width', 'minWidth', 'minHeight', 'relPosMinWidth', 'relPosMinHeight', 'relPosMaxWidth', 'relPosMaxHeight', 'volume'])
+    X = samples
+    y = labels
+    bestfeatures = SelectKBest(score_func=chi2, k='all')
     fit = bestfeatures.fit(X,y)
     dfscores = pd.DataFrame(fit.scores_)
     dfcolumns = pd.DataFrame(X.columns)
@@ -177,21 +175,8 @@ def featureCheck():
     print(featureScores.nlargest(10,'Score'))  #print 10 best features
     print(fn)
 
-def fc2():
-    directory = r'D:\Rohdaten\FRV_FREII1clean\Daten'
-    #samples, labels, aLabels = parseForSklearn(directory)
-    #samples = pd.DataFrame(samples)
-    #labels = pd.DataFrame(labels)
-    vehicles = parse.parseVehicleFiles(directory)
-    df = pd.DataFrame(vehicles)
-    #df = df[df['class'].isin(['PKW', 'Kleintransporter'])]
-    df['axleWeightDiff0'] = df['axleWeight0'] - df['axleWeight1']
-    samples = df.drop(columns=['class', 'aclass'])
-    labels = df['class']
-    #print(df.columns)
     clf = RandomForestClassifier(max_features=int(math.sqrt(len(samples.iloc[0]))), n_estimators=30, min_samples_split=2, n_jobs=3, class_weight = 'balanced')
     clf.fit(samples, labels)
-    print(clf.feature_importances_) #use inbuilt class feature_importances of tree based classifiers
     #plot graph of feature importances for better visualization
     feat_importances = pd.Series(clf.feature_importances_, index=samples.columns)
     feat_importances.nlargest(10).plot(kind='barh')
@@ -214,14 +199,20 @@ def overview():
     #pmmlTest(strain, stest, ltrain, ltest)
     plt.show()
 
+#example with all features
+#samples, labels, aLabels = parseForSklearn(vhcls, features=[ 'axleSpacingsSum', 'weight', 'axles', 'axleWeight0', 'axleWeight1', 'axleWeight2', 'axleWeight3', 'axleWeight4', 'axleWeight5', 'axleWeight6', 'axleWeight7', 'axleWeight8', 'axleWeight9', 'axleSpacing0', 'axleSpacing1', 'axleSpacing2', 'axleSpacing3', 'axleSpacing4', 'axleSpacing5', 'axleSpacing6', 'axleSpacing7', 'axleSpacing8'])
 def lso():
     vhcls = parse.parseVehicleFilesInSubDirs(globs.laserScannerOnlyDir)
     parse.addExtractedFeatures(vhcls)
-    #samples, labels, aLabels = parseForSklearn(vhcls, features=['height',  'width', 'minWidth', 'minHeight', 'relPosMinWidth', 'relPosMinHeight', 'relPosMaxWidth', 'relPosMaxHeight', 'volume'])
-    samples, labels, aLabels = parseForSklearn(vhcls, features=[ 'axleSpacingsSum', 'weight', 'axles', 'axleWeight0', 'axleWeight1', 'axleWeight2', 'axleWeight3', 'axleWeight4', 'axleWeight5', 'axleWeight6', 'axleWeight7', 'axleWeight8', 'axleWeight9', 'axleSpacing0', 'axleSpacing1', 'axleSpacing2', 'axleSpacing3', 'axleSpacing4', 'axleSpacing5', 'axleSpacing6', 'axleSpacing7', 'axleSpacing8'])
+    samples, labels, aLabels = parseForSklearn(vhcls, features=['height',  'width', 'minWidth', 'minHeight', 'relPosMinWidth', 'relPosMinHeight', 'relPosMaxWidth', 'relPosMaxHeight', 'volume'])
     strain, stest, ltrain, ltest = train_test_split(samples, labels, test_size = 0.5, random_state = 42)
-    kNeighborsTest(strain, stest, ltrain, ltest)
+    kNeighborsTest(strain, stest, ltrain, ltest, 'full')
+
+    samples, labels, aLabels = parseForSklearn(vhcls, features=['height',  'minHeight', 'volume', 'width', 'relPosMinHeight'])
+    strain, stest, ltrain, ltest = train_test_split(samples, labels, test_size = 0.5, random_state = 42)
+    kNeighborsTest(strain, stest, ltrain, ltest, 'optimaler')
+
     plt.show()
 
 lso()
-
+#featureCheck()

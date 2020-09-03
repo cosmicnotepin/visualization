@@ -103,7 +103,7 @@ def addDebugLogData(vehicles, directory):
                 scanObj['max_y'] = float(dataMatch.group('max_y').replace(',', '.'))
                 scanObj['height'] = float(dataMatch.group('height').replace(',', '.'))
                 scanObj['width'] = float(dataMatch.group('width').replace(',', '.'))
-                scanObj['scantime'] = (datetime.strptime(dataMatch.group('scantime'), '%H:%M:%S.%f') + timedelta(days=100000)).timestamp() #+10000 because of timestamp() bug for years close to epoch
+                #scanObj['scantime'] = (datetime.strptime(dataMatch.group('scantime'), '%H:%M:%S.%f') + timedelta(days=100000)).timestamp() #+10000 because of timestamp() bug for years close to epoch
                 scanObjs[id].append(scanObj)
             elif(match.group('mergeOrData') == 'combining vehicles'):
                 mergeMatch = re.match(mergePattern, line)
@@ -112,8 +112,8 @@ def addDebugLogData(vehicles, directory):
                 scanObjs[remainingVhcl] += scanObjs[mergedVhcl]
                 del scanObjs[mergedVhcl]
 
-    for key, scanObj in scanObjs.items():
-        scanObj.sort(key=lambda x: x['scantime'])
+    #for key, scanObj in scanObjs.items():
+    #    scanObj.sort(key=lambda x: x['scantime'])
 
     #remove vehicles without scannerData
     vehicles[:] = [vhcl for vhcl in vehicles if scanObjs[vhcl['id']] != []]
@@ -181,6 +181,12 @@ def addExtractedFeatures(vehicles):
         vhcl['maxHeight'] = maxHeight
         vhcl['relPosMaxWidth'] = relPosMaxWidth
         vhcl['relPosMaxHeight'] = relPosMaxHeight
+
+        #smoothing
+        #Gaps/consolidated gaps
+        #consolidated gaps positions
+        #consolidated gaps count
+
         #axleSpacings, vehicleLoopLength = parseWimFile(directory, vf.readline())
         #loopLength makes no difference to knn
         #vehicle['vehicleLoopLength'] = vehicleLoopLength
