@@ -39,7 +39,7 @@ def parseForSklearn(vehicles, features = 'all', classMapper=globs.AchtPlus1To8Pl
     if(features == 'all'):
         features = df.columns.difference(['class', 'aClass', 'scanObjs'])
     samples = df[features]
-    labels = df['class']
+    labels = df['class'].map(classMapper)
     aLabels = df['aClass']
 
     return samples, labels, aLabels
@@ -162,7 +162,7 @@ def rNeighborsTest(strain, stest, ltrain, ltest):
 def featureCheck():
     vhcls = parse.parseVehicleFilesInSubDirs(globs.laserScannerOnlyDir)
     parse.addExtractedFeatures(vhcls)
-    samples, labels, aLabels = parseForSklearn(vhcls, features=['height',  'width', 'minWidth', 'minHeight', 'relPosMinWidth', 'relPosMinHeight', 'relPosMaxWidth', 'relPosMaxHeight', 'volume'])
+    samples, labels, aLabels = parseForSklearn(vhcls, features=['height',  'minSmoothHeight', 'volume', 'width', 'relPosMinSmoothHeight', 'noScanObjs', 'gapInFirstThird', 'gapInSecondThird', 'frontHeight'])
     X = samples
     y = labels
     bestfeatures = SelectKBest(score_func=chi2, k='all')
@@ -204,15 +204,55 @@ def overview():
 def lso():
     vhcls = parse.parseVehicleFilesInSubDirs(globs.laserScannerOnlyDir)
     parse.addExtractedFeatures(vhcls)
-    samples, labels, aLabels = parseForSklearn(vhcls, features=['height',  'width', 'minWidth', 'minHeight', 'relPosMinWidth', 'relPosMinHeight', 'relPosMaxWidth', 'relPosMaxHeight', 'volume'])
-    strain, stest, ltrain, ltest = train_test_split(samples, labels, test_size = 0.5, random_state = 42)
-    kNeighborsTest(strain, stest, ltrain, ltest, 'full')
 
-    samples, labels, aLabels = parseForSklearn(vhcls, features=['height',  'minHeight', 'volume', 'width', 'relPosMinHeight'])
+    #samples, labels, aLabels = parseForSklearn(vhcls, features=['height',  'width', 'minWidth', 'minHeight', 'relPosMinWidth', 'relPosMinHeight', 'relPosMaxWidth', 'relPosMaxHeight', 'volume'])
+    #strain, stest, ltrain, ltest = train_test_split(samples, labels, test_size = 0.5, random_state = 42)
+    #kNeighborsTest(strain, stest, ltrain, ltest, 'full')
+
+    #samples, labels, aLabels = parseForSklearn(vhcls, features=['height',  'minHeight', 'volume', 'width', 'relPosMinHeight'])
+    #strain, stest, ltrain, ltest = train_test_split(samples, labels, test_size = 0.5, random_state = 42)
+    #kNeighborsTest(strain, stest, ltrain, ltest, 'optimaler')
+
+    #samples, labels, aLabels = parseForSklearn(vhcls, features=['height',  'minHeight', 'volume', 'width', 'relPosMinHeight', 'noScanObjs'], classMapper=globs.AchtPlus1To2)
+    samples, labels, aLabels = parseForSklearn(vhcls, features=['height',  'minSmoothHeight', 'volume', 'width', 'relPosMinSmoothHeight', 'noScanObjs'])
     strain, stest, ltrain, ltest = train_test_split(samples, labels, test_size = 0.5, random_state = 42)
-    kNeighborsTest(strain, stest, ltrain, ltest, 'optimaler')
+    kNeighborsTest(strain, stest, ltrain, ltest, 'fakeLength')
+
+    #samples, labels, aLabels = parseForSklearn(vhcls, features=['height',  'minSmoothHeight', 'volume', 'width', 'relPosMinSmoothHeight', 'noScanObjs', 'firstGapPos'])
+    #strain, stest, ltrain, ltest = train_test_split(samples, labels, test_size = 0.5, random_state = 42)
+    #kNeighborsTest(strain, stest, ltrain, ltest, 'firstGapPos')
+
+    #samples, labels, aLabels = parseForSklearn(vhcls, features=['height',  'minSmoothHeight', 'volume', 'width', 'relPosMinSmoothHeight', 'noScanObjs', 'firstGapPos', 'frontHeight'])
+    #strain, stest, ltrain, ltest = train_test_split(samples, labels, test_size = 0.5, random_state = 42)
+    #kNeighborsTest(strain, stest, ltrain, ltest, 'frontHeight')
+
+    samples, labels, aLabels = parseForSklearn(vhcls, features=['height',  'minSmoothHeight', 'volume', 'width', 'relPosMinSmoothHeight', 'noScanObjs', 'gapInFirstThird', 'gapInSecondThird', 'frontHeight'])
+    strain, stest, ltrain, ltest = train_test_split(samples, labels, test_size = 0.5, random_state = 42)
+    kNeighborsTest(strain, stest, ltrain, ltest, 'frontHeight + multigaps')
 
     plt.show()
 
-lso()
+def writeACLS():
+    vhcls = parse.parseVehicleFilesInSubDirs(globs.laserScannerOnlyDir)
+    parse.addExtractedFeatures(vhcls)
+
+    samples, labels, aLabels = parseForSklearn(vhcls, features=['height',  'minSmoothHeight', 'volume', 'width', 'relPosMinSmoothHeight', 'noScanObjs', 'gapInFirstThird', 'gapInSecondThird', 'frontHeight'])
+
+    half = int(len(labels)/2)
+    clfF = make_pipeline(StandardScaler(), neighbors.KNeighborsClassifier(weights = 'distance'))
+    clfF.fit(samples[:half], labels[:half])
+    clfB = make_pipeline(StandardScaler(), neighbors.KNeighborsClassifier(weights = 'distance'))
+    clfB.fit(samples[half:], labels[half:])
+    for i in range(len(labels)):
+        if(i<half):
+            predicted = clfB.predict(samples[i:i+1])
+        else:
+            predicted = clfF.predict(samples[i:i+1])
+
+        with open(vhcls[i]['filename'].replace(".txt", ".acls"), 'w') as acf:
+            acf.write(predicted[0])
+
+
+writeACLS()
+#lso()
 #featureCheck()

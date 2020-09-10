@@ -43,6 +43,9 @@ def parseVehicleFiles(directory):
     this function also parses the *.cls file (which contains the manual classification) that the manual classification GUI creates and 
     the *.acls file (which contains the classification by the current implementation of the 8+1 classifier in vehicle.java) that the ClassificationTester creates.
     """
+
+    pattern = '.*? id=(?P<id>.*?) .*? height=(?P<height>.*?) width=(?P<width>.*?) length=(?P<length>.*?) weight=(?P<weight>.*?) maxAxleWeight=(?P<maweight>.*?) axles=(?P<axles>.*?) axleWeights=(?P<axleWeights>.*?) .*? numWimFiles=(?P<wim>[0-9]+) numAnprPics=(?P<anpr>[0-9]+) numIpCamPics=(?P<cam>[0-9]+) numScannerPics=(?P<scanner>[0-9]+)'
+    patternRE = re.compile(pattern)
     vehicles = []
     #'\d to differentiate from wim.txt files
     for entry in filter(lambda x: re.search(r'\d.txt', x.path), os.scandir(directory + r'\Daten')):
@@ -50,11 +53,11 @@ def parseVehicleFiles(directory):
         try:
             with open(entry.path, 'r') as vf:
                 line = vf.readline()
-                pattern = '.*? id=(?P<id>.*?) .*? height=(?P<height>.*?) width=(?P<width>.*?) length=(?P<length>.*?) weight=(?P<weight>.*?) maxAxleWeight=(?P<maweight>.*?) axles=(?P<axles>.*?) axleWeights=(?P<axleWeights>.*?) .*? numWimFiles=(?P<wim>[0-9]+) numAnprPics=(?P<anpr>[0-9]+) numIpCamPics=(?P<cam>[0-9]+) numScannerPics=(?P<scanner>[0-9]+)'
-                match = re.match(pattern, line)
+                match = patternRE.match(line)
                 if(match.group('length') == '-1,00'):
                     continue #invalid vehicle
-                vehicle['id'] = int(match.group('id'))
+                vehicle['id'] = match.group('id')
+                vehicle['filename'] = entry.path
                 vehicle['length'] = float(match.group('length').replace(',', '.'))
                 vehicle['axles'] = float(match.group('axles').replace(',', '.'))
                 vehicle['weight'] = float(match.group('weight').replace(',', '.'))
@@ -83,37 +86,40 @@ def parseVehicleFiles(directory):
 
 def addDebugLogData(vehicles, directory):
     path = next(os.scandir(directory + r'\Logs'))
-    pattern = '.*? VHCL (?P<id>\d*?): (?P<mergeOrData>.*? .*?) .*'
-    dataPattern = '.*? VHCL (?P<id>\d*?): adding scanner data .*? min_y=(?P<min_y>.*?) max_y=(?P<max_y>.*?) height=(?P<height>.*?) width=(?P<width>.*?) scantime=(?P<scantime>.*?) .*'
-    mergePattern = '.*? VHCL (?P<id>\d*?): combining vehicles (?P<vhcl1>.*?) and (?P<vhcl2>.*)'
+    pattern = '.{24}VHCL (?P<id>\d*?): (?P<mergeOrData>.*? .*?) .*'
+    dataPattern = '.{24}VHCL (?P<id>\d*?): adding scanner data .*? min_y=(?P<min_y>.*?) max_y=(?P<max_y>.*?) height=(?P<height>.*?) width=(?P<width>.*?) scantime=(?P<scth>\d{2}):(?P<sctm>\d{2}):(?P<scts>\d{2})\.(?P<sctms>\d{3}) .*'
+    dataRE = re.compile(dataPattern)
+    mergePattern = '.{24}VHCL (?P<id>\d*?): combining vehicles (?P<vhcl1>.*?) and (?P<vhcl2>.*)'
+    mergeRE = re.compile(mergePattern)
     scanObjs = defaultdict(list) 
     merges = defaultdict(list)
 
     with open(path, 'r') as dl:
         for line in dl:
-            match = re.match(pattern, line) 
-            if(not match):
-                continue
-
-            if(match.group('mergeOrData') == 'adding scanner'):
-                dataMatch = re.match(dataPattern, line)
-                id = int(dataMatch.group('id')) 
+            match = dataRE.match(line)
+            if(match):
+                dataMatch = match
+                id = dataMatch.group('id') 
                 scanObj = {}
                 scanObj['min_y'] = float(dataMatch.group('min_y').replace(',', '.'))
                 scanObj['max_y'] = float(dataMatch.group('max_y').replace(',', '.'))
                 scanObj['height'] = float(dataMatch.group('height').replace(',', '.'))
                 scanObj['width'] = float(dataMatch.group('width').replace(',', '.'))
-                #scanObj['scantime'] = (datetime.strptime(dataMatch.group('scantime'), '%H:%M:%S.%f') + timedelta(days=100000)).timestamp() #+10000 because of timestamp() bug for years close to epoch
+                #scanObj['scantime'] = (datetime.strptime(dataMatch.group('scantime'), '%H:%M:%S.%f') + timedelta(days=100000)).timestamp() #+10000 because of timestamp() bug for years close to epoch and then replace with a steak right before consumption
+                scanObj['scantime'] = int(dataMatch.group('scth'))*3600 + int(dataMatch.group('sctm'))*60 + int(dataMatch.group('scts')) + int(dataMatch.group('sctms'))*0.001
                 scanObjs[id].append(scanObj)
-            elif(match.group('mergeOrData') == 'combining vehicles'):
-                mergeMatch = re.match(mergePattern, line)
+                continue
+
+            match = mergeRE.match(line)
+            if(match):
+                mergeMatch = match
                 remainingVhcl = int(mergeMatch.group('vhcl1'))
                 mergedVhcl = int(mergeMatch.group('vhcl2'))
                 scanObjs[remainingVhcl] += scanObjs[mergedVhcl]
                 del scanObjs[mergedVhcl]
 
-    #for key, scanObj in scanObjs.items():
-    #    scanObj.sort(key=lambda x: x['scantime'])
+    for key, scanObj in scanObjs.items():
+        scanObj.sort(key=lambda x: x['scantime'])
 
     #remove vehicles without scannerData
     vehicles[:] = [vhcl for vhcl in vehicles if scanObjs[vhcl['id']] != []]
@@ -133,11 +139,53 @@ def parseVehicleFilesInSubDirs(directory=globs.laserScannerOnlyDir):
 
     return vhcls
 
+#zentriertes Binomialfilter dritter Ordnung
+def binomFilter(scanObjs):
+    if(len(scanObjs) == 0):
+        return scanObjs
+    if(len(scanObjs) == 1):
+        scanObjs[0]['smoothHeight'] = scanObjs[0]['height']
+        return scanObjs
+
+    for i in range(1,len(scanObjs) - 1):
+        scanObjs[i]['smoothHeight'] = 0.25 * scanObjs[i-1]['height'] + 0.5 * scanObjs[i]['height'] + 0.25 * scanObjs[i+1]['height']
+    scanObjs[0]['smoothHeight'] = 0.5 * scanObjs[0]['height'] + 0.5 * scanObjs[1]['height']
+    scanObjs[-1]['smoothHeight'] = 0.5 * scanObjs[-1]['height'] + 0.5 * scanObjs[-2]['height']
+    return scanObjs
+
+def findGap(scanObjs):
+    gapThreshold = 0.6 
+    gapCandidateIndex = 0
+    gapCandidateSmoothHeight = 10000
+    gapFound = False
+    gapCandidateFound = False
+    firstGapPos = 0
+    firstGapRelPos = 0
+    maxHeightSoFar = 0
+
+    for i in range(len(scanObjs)):
+        so = scanObjs[i]
+
+        if(so['smoothHeight'] > maxHeightSoFar):
+            maxHeightSoFar = so['smoothHeight']
+
+        if(so['smoothHeight'] + gapThreshold < maxHeightSoFar and so['smoothHeight'] < gapCandidateSmoothHeight and not gapFound):
+            gapCandidateIndex = i
+            gapCandidateSmoothHeight = so['smoothHeight']
+            gapCandidateFound = True
+
+        if(gapCandidateFound and so['smoothHeight'] > gapCandidateSmoothHeight and not gapFound):
+            gapFound = True 
+            return gapFound
+
+    return gapFound
+
 def addExtractedFeatures(vehicles):
     """
     all features that have to be calculated from parsed data are added here
     for example: sums or differences of other features like axleSpacingsSum
     """
+
     for vhcl in vehicles: 
         vhcl['axleSpacingsSum'] = 0
         for i in range(int(vhcl['axles']) -1):
@@ -145,42 +193,49 @@ def addExtractedFeatures(vehicles):
         #scanObjs stuff:
         minTimestamp = vhcl['scanObjs'][0]['scantime']
         maxTimestamp = vhcl['scanObjs'][-1]['scantime']
-        length = maxTimestamp - minTimestamp
+        duration = maxTimestamp - minTimestamp
         if(maxTimestamp == minTimestamp):
-            length = 1
-        minWidth = 10000
-        minHeight = 10000
-        relPosMinWidth = 0
-        relPosMinHeight = 0
-        maxWidth = 0
-        maxHeight = 0
-        relPosMaxWidth = 0
-        relPosMaxHeight = 0
+            duration = 1
+        #vhcl['minWidth'] = 10000
+        vhcl['minSmoothHeight'] = 10000
+        vhcl['relPosMinWidth'] = 0
+        vhcl['relPosMinSmoothHeight'] = 0
+        #vhcl['maxWidth'] = 0
+        vhcl['maxSmoothHeight'] = 0
+        #vhcl['relPosMaxWidth'] = 0
+        vhcl['relPosMaxSmoothHeight'] = 0
         volume = 0
-        for so in vhcl['scanObjs']:
-            volume += so['height'] * so['width']
-            if(so['height'] < minHeight):
-                relPosMinHeight = (so['scantime'] - minTimestamp)/length
-                minHeight = so['height']
-            if(so['width'] < minWidth):
-                relPosMinWidth = (so['scantime'] - minTimestamp)/length 
-                minWidth = so['width']
-            if(so['height'] > maxHeight):
-                relPosMaxHeight = (so['scantime'] - minTimestamp)/length
-                maxHeight = so['height']
-            if(so['width'] > maxWidth):
-                relPosMaxWidth = (so['scantime'] - minTimestamp)/length 
-                maxWidth = so['width']
+
+        binomFilter(vhcl['scanObjs'])
+
+        third = int(len(vhcl['scanObjs'])/3)
+        vhcl['gapInFirstThird'] = int(findGap(vhcl['scanObjs'][:third]))
+        vhcl['gapInSecondThird'] = int(findGap(vhcl['scanObjs'][third:2*third]))
+
+
+        for i in range(len(vhcl['scanObjs'])):
+            so = vhcl['scanObjs'][i]
+
+            volume += so['smoothHeight'] * so['width'] 
+
+            if(so['smoothHeight'] < vhcl['minSmoothHeight']):
+                vhcl['relPosMinSmoothHeight'] = (so['scantime'] - minTimestamp)/duration
+                vhcl['minSmoothHeight'] = so['smoothHeight']
+            #if(so['width'] < vhcl['minWidth']):
+            #    vhcl['relPosMinWidth'] = (so['scantime'] - minTimestamp)/duration 
+            #    vhcl['minWidth'] = so['width']
+            if(so['smoothHeight'] > vhcl['maxSmoothHeight']):
+                vhcl['relPosMaxSmoothHeight'] = (so['scantime'] - minTimestamp)/duration
+                vhcl['maxSmoothHeight'] = so['smoothHeight']
+            #if(so['width'] > vhcl['maxWidth']):
+            #    vhcl['relPosMaxWidth'] = (so['scantime'] - minTimestamp)/duration 
+            #    vhcl['maxWidth'] = so['width']
 
         vhcl['volume'] = volume/len(vhcl['scanObjs'])
-        vhcl['minWidth'] = minWidth
-        vhcl['minHeight'] = minHeight
-        vhcl['relPosMinWidth'] = relPosMinWidth
-        vhcl['relPosMinHeight'] = relPosMinHeight
-        vhcl['maxWidth'] = maxWidth
-        vhcl['maxHeight'] = maxHeight
-        vhcl['relPosMaxWidth'] = relPosMaxWidth
-        vhcl['relPosMaxHeight'] = relPosMaxHeight
+        vhcl['noScanObjs'] = len(vhcl['scanObjs'])
+        vhcl['frontHeight'] = sum([so['height'] for so in vhcl['scanObjs'][:3]])/len(vhcl['scanObjs'][:3])
+
+    return vehicles
 
         #smoothing
         #Gaps/consolidated gaps
