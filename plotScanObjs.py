@@ -4,19 +4,22 @@ import matplotlib.pyplot as plt
 from matplotlib.patches import Rectangle
 import matplotlib.lines as mlines
 import time
+import math
+import pickle
 
 import parse
 import globs
 
-fig, ax = plt.subplots()
-ax.set_xlabel('x')
-ax.set_ylabel('y')
-ax.set_ylim(bottom=0, top=96)
-ax.set_xlim(left=0, right=140)
-ax.set_yticks(range(6,102,12))
-ax.set_yticklabels(reversed([cls.name for cls in globs.vClass if cls.value in range(1,9)]))
+fig1, ax1 = plt.subplots()
+ax1.set_xlabel('x')
+ax1.set_ylabel('y')
+ax1.set_ylim(bottom=0, top=96)
+ax1.set_xlim(left=0, right=140)
+ax1.set_yticks(range(6,102,12))
+ax1.set_yticklabels(reversed([cls.name for cls in globs.vClass if cls.value in range(1,9)]))
 yPositions = [-1000, 7*12, 6*12, 5*12, 4*12, 3*12, 2*12, 1*12, 0*12, -1000, -1000]
 allArtists = []
+fig2, ax2 = plt.subplots()
 
 def plotDebugLog(path=r'D:\Rohdaten\FRV_FREII1clean\Logs\2020-05-25_00-00-00_NKP-FREII1-debug.log'):
     scanObjs = parse.parseDebugLog(path)
@@ -55,9 +58,9 @@ def plotProfileAt(ax, vhcl, x, y):
     for scanObj in vhcl['scanObjs']:
         lineX = x + (scanObj['scantime'] - startTime)*globs.averageSpeed
         lineH = mlines.Line2D([lineX, lineX], [y, y + scanObj['height']], lw=1., alpha=0.5)
-        #widthOffset = scanObj['min_y'] - startWidth
-        #lineW = mlines.Line2D([lineX, lineX], [y + 6 + widthOffset, y + 6 + widthOffset + scanObj['width']], lw=1., alpha=0.5, color='green')
-        lineW = mlines.Line2D([lineX, lineX], [y + 6, y + 6 + scanObj['smoothHeight']], lw=1., alpha=0.5, color='red')
+        widthOffset = scanObj['min_y'] - startWidth
+        lineW = mlines.Line2D([lineX, lineX], [y + 6 + widthOffset, y + 6 + widthOffset + scanObj['width']], lw=1., alpha=0.5, color='green')
+        #lineW = mlines.Line2D([lineX, lineX], [y + 6, y + 6 + scanObj['smoothHeight']], lw=1., alpha=0.5, color='red')
         allArtists.append(lineH)
         allArtists.append(lineW)
         ax.add_line(lineH)
@@ -91,10 +94,9 @@ def plotVehicles(vhcls, brokenOnly=False):
         vhclsByClass[globs.vClass[vhcl['class']].value].append(vhcl)
     for cls in globs.vClass:
         plotted = 0
-        for i in range(len(vhclsByClass[cls.value])):
-            vhcl = vhclsByClass[cls.value][i]
+        for vhcl in vhclsByClass[cls.value]:
             if(vhcl['class'] != vhcl['aClass'] or not brokenOnly): 
-                plotProfileAt(ax, vhcl, plotted*30, yPositions[cls.value])
+                plotProfileAt(ax1, vhcl, plotted*30, yPositions[cls.value])
                 plotted += 1
             if(plotted > 30):
                 break
@@ -102,5 +104,76 @@ def plotVehicles(vhcls, brokenOnly=False):
     plt.draw()
     plt.pause(0.1)
 
-#plotVehicles(parse.addExtractedFeatures(parse.parseVehicleFiles(globs.laserScannerOnlyDir + r'\1')))
-#plt.show()
+SCAN_MAX_NUM_VALUES = 274
+deltaAngle = math.radians(96.3281/(SCAN_MAX_NUM_VALUES-1))
+scannerSin = [lambda i=i: math.sin(i*deltaAngle) for i in range(SCAN_MAX_NUM_VALUES)]
+scannerCos = [lambda i=i : math.cos(i*deltaAngle) for i in range(SCAN_MAX_NUM_VALUES)]
+scannerDataArtists = []
+
+def plotScannerData(scannerData):
+    global scannerDataArtists
+    scannerHeight = 5000
+    for artist in scannerDataArtists:
+        artist.remove()
+    scannerDataArtists = []
+    x = []
+    y = []
+    for i in range(SCAN_MAX_NUM_VALUES):
+        if('rawData' in scannerData):
+            x.append(scannerData['rawData']['dists'][i] * scannerSin[i]())
+            y.append(scannerHeight - (scannerData['rawData']['dists'][i] * scannerCos[i]()))
+
+    factor = 1000
+    rect = Rectangle([factor * scannerData['min_y'], 0], factor * scannerData['width'], factor * scannerData['height'], fill=False)
+    ax2.add_patch(rect)
+    scannerDataArtists.append(rect)
+    scannerDataArtists.append(ax2.scatter(x,y, s=0.5, c='blue'))
+    fig2.canvas.draw()
+
+clicked = False
+def onclick(event):
+    global clicked
+    clicked = True
+
+def plottingTest():
+    global fig1,fig2,clicked
+    fig1.canvas.mpl_connect('button_press_event', onclick)
+    fig2.canvas.mpl_connect('button_press_event', onclick)
+    with open('2vhcls.pickle', 'rb') as f:
+        twoVhcls = pickle.load(f)
+        for so in twoVhcls[0]['scanObjs']:
+            plotScannerData(so)
+            while(not clicked):
+                plt.pause(0.1)
+            clicked = False
+
+#plottingTest()
+def plotScannerRawOfVhcl(request):
+    global fig1,fig2,clicked
+    #fig1.canvas.mpl_connect('button_press_event', onclick)
+    fig2.canvas.mpl_connect('button_press_event', onclick)
+    with open('InterVhcls.pickle', 'rb') as f:
+        interVhcls = pickle.load(f)
+    if(not request):
+        request = input('id to display: ')
+    while(request != '0'):
+        vhcl = interVhcls[request]
+        for so in vhcl['scanObjs']:
+            plotScannerData(so)
+            while(not clicked):
+                plt.pause(0.1)
+            clicked = False
+        request = int(input('id to display: '))
+
+def justPlotAll():
+    global fig2,clicked
+    fig2.canvas.mpl_connect('button_press_event', onclick)
+    with open('all.pickle', 'rb') as f:
+        allVhcls = pickle.load(f)
+    for vhcl in allVhcls:
+        for so in vhcl['scanObjs']:
+            plotScannerData(so)
+            while(not clicked):
+                plt.pause(0.1)
+            clicked = False
+

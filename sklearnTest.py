@@ -243,7 +243,7 @@ def writeACLS():
     clfF.fit(samples[:half], labels[:half])
     clfB = make_pipeline(StandardScaler(), neighbors.KNeighborsClassifier(weights = 'distance'))
     clfB.fit(samples[half:], labels[half:])
-    for i in range(len(labels)):
+    for i in range(len(samples)):
         if(i<half):
             predicted = clfB.predict(samples[i:i+1])
         else:

@@ -4,6 +4,9 @@ from datetime import datetime, timedelta
 import contextlib
 import itertools
 from collections import defaultdict
+import struct
+import time
+import pickle
 
 import globs
 
@@ -86,6 +89,7 @@ def parseVehicleFiles(directory):
 
 def addDebugLogData(vehicles, directory):
     path = next(os.scandir(directory + r'\Logs'))
+    #TODO parse date from filename
     pattern = '.{24}VHCL (?P<id>\d*?): (?P<mergeOrData>.*? .*?) .*'
     dataPattern = '.{24}VHCL (?P<id>\d*?): adding scanner data .*? min_y=(?P<min_y>.*?) max_y=(?P<max_y>.*?) height=(?P<height>.*?) width=(?P<width>.*?) scantime=(?P<scth>\d{2}):(?P<sctm>\d{2}):(?P<scts>\d{2})\.(?P<sctms>\d{3}) .*'
     dataRE = re.compile(dataPattern)
@@ -105,8 +109,7 @@ def addDebugLogData(vehicles, directory):
                 scanObj['max_y'] = float(dataMatch.group('max_y').replace(',', '.'))
                 scanObj['height'] = float(dataMatch.group('height').replace(',', '.'))
                 scanObj['width'] = float(dataMatch.group('width').replace(',', '.'))
-                #scanObj['scantime'] = (datetime.strptime(dataMatch.group('scantime'), '%H:%M:%S.%f') + timedelta(days=100000)).timestamp() #+10000 because of timestamp() bug for years close to epoch and then replace with a steak right before consumption
-                scanObj['scantime'] = int(dataMatch.group('scth'))*3600 + int(dataMatch.group('sctm'))*60 + int(dataMatch.group('scts')) + int(dataMatch.group('sctms'))*0.001
+                scanObj['scantime'] = 1000 * (int(dataMatch.group('scth'))*3600 + int(dataMatch.group('sctm'))*60 + int(dataMatch.group('scts'))) + int(dataMatch.group('sctms'))# + datetime(2020, 5, 25).timestamp()
                 scanObjs[id].append(scanObj)
                 continue
 
@@ -129,7 +132,7 @@ def addDebugLogData(vehicles, directory):
 
 def parseVehicleFilesInSubDirs(directory=globs.laserScannerOnlyDir):
     """
-    expects directory to contains directories parsable with parseVehicleFiles - 
+    expects directory to contain directories parsable with parseVehicleFiles - 
     that is: the usual Daten/ Bilder/ Logs Folders containing the necessary files
     """
     vhcls = []
@@ -163,9 +166,7 @@ def findGap(scanObjs):
     firstGapRelPos = 0
     maxHeightSoFar = 0
 
-    for i in range(len(scanObjs)):
-        so = scanObjs[i]
-
+    for i, so in enumerate(scanObjs):
         if(so['smoothHeight'] > maxHeightSoFar):
             maxHeightSoFar = so['smoothHeight']
 
@@ -237,26 +238,124 @@ def addExtractedFeatures(vehicles):
 
     return vehicles
 
-        #smoothing
-        #Gaps/consolidated gaps
-        #consolidated gaps positions
-        #consolidated gaps count
+MAX_ENTRIES = 10
+MAX_DELAY = 10000
 
-        #axleSpacings, vehicleLoopLength = parseWimFile(directory, vf.readline())
-        #loopLength makes no difference to knn
-        #vehicle['vehicleLoopLength'] = vehicleLoopLength
+#4-Byte Markierung am Begin der Datei
+VTDFILE_MAGIC = 2754628164
+#4-Byte Markierung von Dateien der Version 0
+VTDFILE_VERSION_0 = 0x5F005F00
+#4-Byte Markierung von Dateien der Version 1
+VTDFILE_VERSION_1 = 0x5F005F01
+#4-Byte Markierung von Dateien der Version 2
+VTDFILE_VERSION_2 = 0x5F005F02
+#4-Byte Markierung vor jedem Objekt
+VTDOBJ_MAGIC = 569825642
 
-        #vehicle['axleSpacingsSum'] = 0
-        #for i in range(globs.maxAxles - 1):
-        #    if(i<len( axleSpacings )):
-        #        vehicle['axleSpacing' + str(i)] = axleSpacings[i]
-        #        vehicle['axleSpacingsSum'] = vehicle['axleSpacingsSum'] + axleSpacings[i]
-        #    else:
-        #        vehicle['axleSpacing' + str(i)] = 0
-        #overhang worsens knn result
-        #vehicle['overhang'] = vehicleLoopLength - vehicle['axleSpacingsSum']
-        #numMainAxleSpacings makes no difference to knn
-        #vehicle['numMainAxleSpacings'] = 0
-        #for spacing in axleSpacings:
-        #    if (spacing > 2):
-        #        vehicle['numMainAxleSpacings'] += 1
+#Maximale Anzahl von Meta-Informationen
+NTDFILE_META_MAX = 20
+#Maximale Länge eines Schlüsselnames
+NTDFILE_META_KEY_MAX = 50
+#Maximale Länge eines Wertes
+NTDFILE_META_VALUE_MAX = 100
+
+VTDFILE_OBJHEADER_SIZE = 20
+VTDFILE_SCANNERDATA_SIZE = 28 + (274 * 2)
+
+#extracts on Scannerdata set from the vtdFile and returns it as a dictionary
+def readScannerData(vtdFile):
+    scannerData = {}
+    objHeader = vtdFile.read(VTDFILE_OBJHEADER_SIZE)
+    magic = int.from_bytes(objHeader[:4], 'little', signed=False)
+    if(magic != VTDOBJ_MAGIC):
+        return None
+    objId = int.from_bytes(objHeader[4:8], 'little', signed=False)
+    #[8:12] #vtdWriter.addScannerData time, not scantime
+    #[12:16]
+    length = int.from_bytes(objHeader[16:20], 'little', signed=False)
+    if(length != VTDFILE_OBJHEADER_SIZE + VTDFILE_SCANNERDATA_SIZE - 4):
+        return None
+    data = vtdFile.read(VTDFILE_SCANNERDATA_SIZE)
+    scannerId = int.from_bytes(data[:4], 'little', signed=False)
+    dataItems = int.from_bytes(data[4:8], 'little', signed=False)
+    dists = []
+    for i in range(dataItems):
+        dists.append(int.from_bytes(data[8+(i*2):10+(i*2)], 'little', signed=False))
+    scannerData['dists'] = dists
+    index = 10 + (dataItems-1)*2
+    startAngle = int.from_bytes(data[index:index+4], 'little', signed=False)
+    index += 4
+    endAngle = int.from_bytes(data[index:index+4], 'little', signed=False)
+    index += 4
+    vertAngle, = struct.unpack('<f', data[index:index+4])
+    scannerData['vertAngle'] = vertAngle
+    index += 4
+    time1 = int.from_bytes(data[index:index+4], 'little', signed=False)
+    index += 4
+    time2 = int.from_bytes(data[index:index+4], 'little', signed=False)
+    index += 4
+    timestamp = int(time1*1000 + time2/1000)
+    dt = datetime.fromtimestamp(timestamp/1000) #this is not 'utcfromtimestamp' for a reason!
+    scannerData['scantime'] =  1000*(dt.hour*3600 + dt.minute*60 + dt.second) + dt.microsecond/1000
+    return scannerData
+
+
+def addScannerRawData(vhcls, vtdFilePath):
+    scanTime2Vhcl = defaultdict(lambda : list([1]))
+    counter = 0
+    allCounter = 0
+    minScanTime = 99999999
+    maxScanTime = 0
+    for vhcl in vhcls:
+        for so in vhcl['scanObjs']:
+            minScanTime = min(minScanTime, so['scantime'])
+            maxScanTime = max(maxScanTime, so['scantime'])
+            allCounter += 1
+            if(so['scantime'] in scanTime2Vhcl):
+                counter += 1
+            scanTime2Vhcl[so['scantime']].append(so)
+
+    start = time.time()
+    with open(vtdFilePath, 'rb') as vtd:
+        fileHeader = vtd.read(12 + NTDFILE_META_MAX * (NTDFILE_META_KEY_MAX + NTDFILE_META_VALUE_MAX))
+        magic = int.from_bytes(fileHeader[:4], 'little', signed=False)
+        version = int.from_bytes(fileHeader[4:8], 'little', signed=False)
+        scannerData = None
+        noScanObjsForRaw = 0
+        while(scannerData := readScannerData(vtd)):
+            if(scannerData['scantime'] > maxScanTime):
+                break
+            allSos = scanTime2Vhcl[scannerData['scantime']]
+            if(allSos[0] == len(allSos)):
+                noScanObjsForRaw += 1
+                continue
+            allSos[allSos[0]]['rawData'] = scannerData
+            allSos[0] += 1
+        print(f"noScanObjsForRaw: {noScanObjsForRaw}")
+
+    print("it took: " + str(int(((time.time() - start)/60))) + ':' + str((time.time() - start)%60))
+    counter = 0
+    allCounter = 0
+    for vhcl in vhcls:
+        for so in vhcl['scanObjs']:
+            allCounter +=1
+            if(not 'rawData' in so):
+                counter +=1
+    print(f"no rawData counter = {counter} of {allCounter}")
+    return vhcls
+
+def pickleDumpSome():
+    vhcls = addScannerRawData(parseVehicleFiles(globs.laserScannerOnlyDir + r'\1'), globs.laserScannerOnlyDir + r'\1' + r'\Daten\2020-05-25_00-00-00_NKP-FREII1.vtd')
+    interestingIds = ['314970','314901', '315234', '318647', '320420']
+    #314970 ist normaler pkw, rest ist seltsame lkw
+    toPickle = {}
+    for vhcl in vhcls:
+        if(vhcl['id'] in interestingIds):
+            toPickle[vhcl['id']] = vhcl
+    with open('InterVhcls.pickle', 'wb') as f:
+        pickle.dump(toPickle, f, pickle.HIGHEST_PROTOCOL)
+
+def pickleDumpAll():
+    vhcls = addScannerRawData(parseVehicleFiles(globs.laserScannerOnlyDir + r'\1'), globs.laserScannerOnlyDir + r'\1' + r'\Daten\2020-05-25_00-00-00_NKP-FREII1.vtd')
+    with open('all.pickle', 'wb') as f:
+        pickle.dump(vhcls, f, pickle.HIGHEST_PROTOCOL)

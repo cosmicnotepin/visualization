@@ -8,7 +8,7 @@ directory = r'D:\Rohdaten\FRV_FREII1clean\Daten'
 laserScannerOnlyDir = r'D:\Rohdaten\LaserScannerOnly'
 
 maxAxles = 10
-averageSpeed = 11 # 40 km/h in m/s roughly
+averageSpeed = 11/1000 # 40 km/h in m/ms roughly
 
 class vClass(Enum):
     nicht_klass_Kfz = 0

@@ -10,7 +10,6 @@ def pipe_server():
     print("pipe server")
     vhcls = parse.parseVehicleFiles(globs.laserScannerOnlyDir + r'\1')
     vhcls = parse.addExtractedFeatures(vhcls)
-    print(len(vhcls))
     count = 0
     pipe = win32pipe.CreateNamedPipe(
         r'\\.\pipe\Foo',
@@ -32,9 +31,8 @@ def pipe_server():
             resp = win32file.ReadFile(pipe, 64*1024)
             id = resp[1].decode()
             print(id)
-            print(len(vhcls))
-            for i in range(len(vhcls)):
-                if(vhcls[i]['id'] == id):
+            for i, vhcl in enumerate(vhcls):
+                if(vhcl['id'] == id):
                     plotScanObjs.plotVehicles(vhcls[i:i+1])
                     break
 
@@ -50,6 +48,16 @@ def pipe_server():
     finally:
         win32file.CloseHandle(pipe)
 
+if __name__ == '__main__':
+    pipe_server()
+    #if len(sys.argv) < 2:
+    #    print("need s or c as argument")
+    #elif sys.argv[1] == "s":
+    #    pipe_server()
+    #elif sys.argv[1] == "c":
+    #    pipe_client()
+    #else:
+    #    print(f"no can do: {sys.argv[1]}")
 
 #def pipe_client():
 #    print("pipe client")
@@ -81,13 +89,3 @@ def pipe_server():
 #                quit = True
 
 
-if __name__ == '__main__':
-    pipe_server()
-    #if len(sys.argv) < 2:
-    #    print("need s or c as argument")
-    #elif sys.argv[1] == "s":
-    #    pipe_server()
-    #elif sys.argv[1] == "c":
-    #    pipe_client()
-    #else:
-    #    print(f"no can do: {sys.argv[1]}")
