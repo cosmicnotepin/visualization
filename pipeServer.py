@@ -5,8 +5,39 @@ import parse
 import plotScanObjs
 import globs
 import matplotlib.pyplot as plt
+import threading
+import math
 
-def pipe_server():
+def pipeListener():
+    pipe = win32pipe.CreateNamedPipe(
+        r'\\.\pipe\Foo',
+        win32pipe.PIPE_ACCESS_DUPLEX,
+        win32pipe.PIPE_TYPE_MESSAGE | win32pipe.PIPE_READMODE_MESSAGE | win32pipe.PIPE_WAIT,
+        1, 65536, 65536,
+        0,
+        None)
+
+    try:
+        print("waiting for client")
+        win32pipe.ConnectNamedPipe(pipe, None)
+        print("got client")
+        while(1):
+            resp = win32file.ReadFile(pipe, 64*1024)
+            id = resp[1].decode()
+            print(id)
+            plotScanObjs.setVhclIdToPlot(id)
+        print("finished now")
+    finally:
+        win32file.CloseHandle(pipe)
+
+def pipeServerRaw(pickleFile, scannerDist, scannerHeight0, scannerHeight1, scannerHorizAngle0, scannerHorizAngle1):
+    print("pipe server")
+    listenerThread = threading.Thread(target=pipeListener)
+    listenerThread.start()
+    print(f"reading vhcl info from pickle ({pickleFile})")
+    plotScanObjs.navigateCurrentScanObjs(pickleFile, scannerDist, scannerHeight0, scannerHeight1, scannerHorizAngle0, scannerHorizAngle1)
+
+def pipeServerFrontSide():
     print("pipe server")
     vhcls = parse.parseVehicleFiles(globs.laserScannerOnlyDir + r'\1')
     vhcls = parse.addExtractedFeatures(vhcls)
@@ -33,7 +64,7 @@ def pipe_server():
             print(id)
             for i, vhcl in enumerate(vhcls):
                 if(vhcl['id'] == id):
-                    plotScanObjs.plotVehicles(vhcls[i:i+1])
+                    plotScanObjs.plotVhclScanObjs(vhcls[i:i+1])
                     break
 
         #while count < 10:
@@ -49,15 +80,8 @@ def pipe_server():
         win32file.CloseHandle(pipe)
 
 if __name__ == '__main__':
-    pipe_server()
-    #if len(sys.argv) < 2:
-    #    print("need s or c as argument")
-    #elif sys.argv[1] == "s":
-    #    pipe_server()
-    #elif sys.argv[1] == "c":
-    #    pipe_client()
-    #else:
-    #    print(f"no can do: {sys.argv[1]}")
+#    pipeServerRaw(pickleFile='all.pickle', scannerDist=3550, scannerHeight0=5170, scannerHeight1=5260, scannerHorizAngle0 = math.radians(-1), scannerHorizAngle1=math.radians(-5))
+    pipeServerRaw(pickleFile='all2.pickle', scannerDist=3550, scannerHeight0=5170, scannerHeight1=5260, scannerHorizAngle0 = math.radians(-1), scannerHorizAngle1=math.radians(-5))
 
 #def pipe_client():
 #    print("pipe client")

@@ -277,6 +277,7 @@ def readScannerData(vtdFile):
         return None
     data = vtdFile.read(VTDFILE_SCANNERDATA_SIZE)
     scannerId = int.from_bytes(data[:4], 'little', signed=False)
+    scannerData['id'] = scannerId
     dataItems = int.from_bytes(data[4:8], 'little', signed=False)
     dists = []
     for i in range(dataItems):
@@ -356,6 +357,12 @@ def pickleDumpSome():
         pickle.dump(toPickle, f, pickle.HIGHEST_PROTOCOL)
 
 def pickleDumpAll():
-    vhcls = addScannerRawData(parseVehicleFiles(globs.laserScannerOnlyDir + r'\1'), globs.laserScannerOnlyDir + r'\1' + r'\Daten\2020-05-25_00-00-00_NKP-FREII1.vtd')
-    with open('all.pickle', 'wb') as f:
+    #vhcls = addExtractedFeatures(parseVehicleFiles(globs.laserScannerOnlyDir + r'\1'))
+    #vhcls = addScannerRawData(vhcls, globs.laserScannerOnlyDir + r'\1' + r'\Daten\2020-05-25_00-00-00_NKP-FREII1.vtd')
+    vhcls = addExtractedFeatures(parseVehicleFiles(globs.laserScannerOnlyDir + r'\3'))
+    vhcls = addScannerRawData(vhcls, globs.laserScannerOnlyDir + r'\3' + r'\Daten\2020-06-02_00-15-07_NKP-FRV.vtd')
+    with open('all2.pickle', 'wb') as f:
         pickle.dump(vhcls, f, pickle.HIGHEST_PROTOCOL)
+
+if __name__ == '__main__':
+    pickleDumpAll()

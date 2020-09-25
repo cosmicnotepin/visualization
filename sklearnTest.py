@@ -253,6 +253,7 @@ def writeACLS():
             acf.write(predicted[0])
 
 
-writeACLS()
-#lso()
-#featureCheck()
+if __name__ == "__main__":
+    #writeACLS()
+    lso()
+    #featureCheck()
